@@ -1,0 +1,13 @@
+playwright
+python-dotenv
+moviepy<2.0.0
+openai
+requests
+Pillow
+flask
+flask-cors
+edge-tts
+numpy
+google-genai
+google-auth-oauthlib
+google-api-python-client

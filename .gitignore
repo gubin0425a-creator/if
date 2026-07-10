@@ -1,0 +1,31 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Sensitive API credentials and session cookies (CRITICAL!)
+.env
+client_secret*.json
+token.pickle
+chrome_profile/
+
+# Created videos and temp media output assets
+completed/
+videos_to_upload/
+temp/
+subtitles/*.srt
+subtitles/*_metadata.json
+
+# Cache and metadata
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# User logs
+*.log
+logs/
+.system_generated/
+scratch/

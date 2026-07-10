@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos - AI 역사 숏폼 자동화 대시보드</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0a0a12;
+            --bg-card: rgba(25, 25, 45, 0.45);
+            --border-glow: rgba(138, 43, 226, 0.3);
+            --primary: #9d4edd;
+            --primary-hover: #b5179e;
+            --accent: #4cc9f0;
+            --text-main: #f8f9fa;
+            --text-muted: #a0a0c0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+            background: var(--bg-base);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(76, 201, 240, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(157, 78, 221, 0.08) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 헤더 스타일 */
+        header {
+            padding: 24px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(10, 10, 18, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-area h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, var(--accent), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-area span {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 2px 8px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        /* 컨테이너 */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 40px;
+            width: 100%;
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 350px 1fr 400px;
+            gap: 30px;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 패널 공통 스타일 */
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 8px 32px 0 rgba(138, 43, 226, 0.05);
+        }
+
+        .panel-title {
+            font-size: 20px;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 패널 1 - 입력란 */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .input-group input, .input-group select {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 14px;
+            color: white;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(157, 78, 221, 0.2);
+        }
+
+        .btn {
+            background: linear-gradient(45deg, var(--primary), var(--primary-hover));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, filter 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-accent {
+            background: linear-gradient(45deg, var(--accent), #4361ee);
+        }
+
+        /* 패널 2 - 카드 추천 */
+        .cards-container {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            flex-grow: 1;
+            justify-content: center;
+        }
+
+        .placeholder-message {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 50px 20px;
+            font-style: italic;
+        }
+
+        .topic-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .topic-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent);
+            transform: scale(1.02);
+        }
+
+        .card-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(76, 201, 240, 0.15);
+            color: var(--accent);
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            padding-right: 50px;
+        }
+
+        .card-hook {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* 패널 3 - 로그 및 플레이어 */
+        .progress-container {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .progress-step {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .progress-step.active {
+            color: var(--accent);
+        }
+
+        .progress-step.completed {
+            color: var(--primary);
+        }
+
+        .console {
+            background: #050508;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #4af626;
+            height: 250px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        /* 비디오 플레이어 */
+        .video-player-container {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: black;
+            aspect-ratio: 9/16;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 비디오 갤러리 */
+        .gallery-section {
+            grid-column: 1 / -1;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .gallery-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .gallery-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+        }
+
+        .gallery-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .gallery-card-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .gallery-btn {
+            flex-grow: 1;
+            padding: 8px;
+            font-size: 13px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .gallery-btn-play {
+            background: rgba(76, 201, 240, 0.15);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        .gallery-btn-upload {
+            background: rgba(157, 78, 221, 0.15);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: var(--accent);
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #e63946, #d90429);
+        }
+
+        /* 실시간 이미지 프리뷰 */
+        .image-preview-panel {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+
+        .image-preview-grid {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            scroll-behavior: smooth;
+        }
+
+        .preview-card {
+            flex: 0 0 110px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .preview-card img {
+            width: 110px;
+            height: 196px; /* 9:16 vertical */
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s ease;
+        }
+
+        .preview-card img:hover {
+            transform: scale(1.05);
+        }
+
+        .preview-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        /* SEO 원형 스코어보드 다이얼 스타일 */
+        .seo-dial-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+
+        .circle-progress-svg {
+            transform: rotate(-90deg);
+        }
+
+        .circle-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.05);
+            stroke-width: 8;
+        }
+
+        .circle-bar {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 8;
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 251.2;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.8s ease, stroke 0.8s ease;
+        }
+
+        .seo-score-text {
+            font-size: 24px;
+            font-weight: 800;
+            fill: white;
+        }
+
+        .seo-dial-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex-grow: 1;
+        }
+
+        .seo-dial-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .seo-dial-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* 키워드 칩 스타일 */
+        .seo-chip {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            white-space: nowrap;
+        }
+        
+        .seo-chip.triple {
+            background: rgba(74, 246, 38, 0.12);
+            color: #4af626;
+            border: 1px solid rgba(74, 246, 38, 0.25);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <h1>Chronos <span>v3.0 - AI Shorts Creator</span></h1>
+        </div>
+        <div style="font-size: 14px; color: var(--text-muted);">
+            구동 상태: <span style="color: #4af626; font-weight: 600;">온라인</span>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- 패널 1: 입력 영역 -->
+        <div class="panel">
+            <h2 class="panel-title">💡 기획 & 설정</h2>
+            
+            <div class="input-group">
+                <label for="base-topic">역사 주제 입력</label>
+                <input type="text" id="base-topic" placeholder="예: 임진왜란, 세종대왕, 삼국유사" value="임진왜란">
+            </div>
+
+            <div class="input-group">
+                <label for="lang-select">나레이션 & 자막 언어</label>
+                <select id="lang-select">
+                    <option value="ko" selected>한국어 (KO)</option>
+                    <option value="en">English (EN)</option>
+                    <option value="ja">日本語 (JA)</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="style-select">AI 이미지 비주얼 스타일</label>
+                <select id="style-select">
+                    <option value="photorealistic" selected>📸 극실사 사진 (Photorealistic)</option>
+                    <option value="ink-painting">🎨 전통 동양 수묵화 (Ink Wash Painting)</option>
+                    <option value="oil-painting">🖼️ 고전 역사 유화 (Oil Painting)</option>
+                    <option value="webtoon">⚡ 트렌디 웹툰 일러스트 (Webtoon)</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="mood-select">배경음악 분위기 스타일</label>
+                <select id="mood-select">
+                    <option value="auto" selected>🎵 자동 감지 (Auto Mood)</option>
+                    <option value="epic">⚔️ 웅장하고 거대한 (Epic)</option>
+                    <option value="mystery">👁️ 신비롭고 기묘한 (Mystery)</option>
+                    <option value="sad">💧 슬프고 아련한 (Sad)</option>
+                    <option value="tension">🔥 긴박하고 긴장되는 (Tension)</option>
+                    <option value="neutral">🍃 차분하고 잔잔한 (Neutral)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-accent" id="recommend-btn">
+                <span>🪄 AI 소주제 추천받기</span>
+            </button>
+            
+            <button class="btn" id="direct-btn" style="background: linear-gradient(45deg, #FF9F1C, #FF6B6B); width: 100%;">
+                <span>⚡ 추천 없이 이 주제로 바로 제작</span>
+            </button>
+            
+            <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+                <button class="btn" id="login-session-btn" style="background: linear-gradient(45deg, #4EA8DE, #56CFE1); width: 100%; margin-bottom: 10px;">
+                    <span>🔑 틱톡 로그인 세션 연동</span>
+                </button>
+                <button class="btn" id="upload-btn" style="width: 100%;">
+                    <span>📲 틱톡 자동 업로드 실행</span>
+                </button>
+                <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: center;">
+                    대기 큐에 있는 모든 영상들을 틱톡으로 일괄 게시 대기시킵니다.
+                </p>
+            </div>
+        </div>
+
+        <!-- 패널 2: 추천 카드 영역 -->
+        <div class="panel">
+            <h2 class="panel-title">📺 소주제 추천 카드</h2>
+            
+            <div class="cards-container" id="cards-container">
+                <div class="placeholder-message">
+                    주제를 입력하고 'AI 소주제 추천받기' 버튼을 누르시면 여기에 추천 카드가 표시됩니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- 패널 3: 진행 상태 & 비디오 플레이어 -->
+        <div class="panel">
+            <h2 class="panel-title">⚙️ 실시간 렌더링 & 미리보기</h2>
+            
+            <div class="progress-container" style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; width: 100%;">
+                    <span class="progress-step" id="step-script">대본</span>
+                    <span class="progress-step" id="step-media">미디어</span>
+                    <span class="progress-step" id="step-audio">음성</span>
+                    <span class="progress-step" id="step-compile">조립</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--accent); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; width: 100%;">
+                    <span id="elapsed-timer">⏱️ 대기 중</span>
+                    <span id="estimated-time">⏳ 남은 시간: -</span>
+                </div>
+                <!-- 중지 & 다시시작 버튼 -->
+                <div style="display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                    <button class="btn btn-danger" id="stop-btn" style="flex: 1; padding: 10px; font-size: 13px; display: none;" disabled>
+                         🛑 제작 중지
+                    </button>
+                    <button class="btn btn-accent" id="restart-btn" style="flex: 1; padding: 10px; font-size: 13px; display: none;">
+                         🔄 다시 시작
+                    </button>
+                </div>
+            </div>
+
+            <!-- 실시간 생성 이미지 뷰어 -->
+            <div class="image-preview-panel" id="image-preview-panel" style="display: none;">
+                <div style="font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px;">🎨 실시간 생성 중인 AI 역사 이미지</div>
+                <div class="image-preview-grid" id="image-preview-grid"></div>
+            </div>
+
+            <!-- 실시간 SEO 스코어보드 다이얼 -->
+            <div class="seo-dial-box" id="seo-dial-panel" style="display: none; flex-direction: column; align-items: stretch; gap: 14px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+                    <svg width="100" height="100" class="circle-progress-svg">
+                        <circle cx="50" cy="50" r="40" class="circle-bg"></circle>
+                        <circle cx="50" cy="50" r="40" class="circle-bar" id="seo-circle-bar"></circle>
+                        <text x="50" y="58" text-anchor="middle" class="seo-score-text" id="seo-dial-text" transform="rotate(90 50 50)">0</text>
+                    </svg>
+                    <div class="seo-dial-info">
+                        <div class="seo-dial-title" id="seo-dial-title">vidIQ SEO 점수: 진단 대기 중</div>
+                        <div class="seo-dial-desc" id="seo-dial-desc">영상 생성이 완료되면 여기에 실시간 SEO 점수와 분석 리포트가 표시됩니다.</div>
+                    </div>
+                </div>
+
+                <!-- 최적화 키워드 표기 영역 (신설) -->
+                <div id="seo-keywords-box" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; display: none; flex-direction: column; gap: 10px;">
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: #4af626; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">🎯 핵심 트리플 키워드 <span style="font-size: 9px; font-weight: normal; color: var(--text-muted);">(제목/설명/태그 공통)</span></div>
+                        <div id="seo-triple-tags" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 6px;">🏷️ 검색 최적화 추천 태그 목록</div>
+                        <div id="seo-all-tags" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto; padding-right: 4px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="console" id="console-log">대기 중...</div>
+
+            <div class="video-player-container">
+                <video id="video-preview" controls style="display: none;"></video>
+                <div id="video-placeholder" style="color: var(--text-muted); text-align: center; font-size: 14px;">
+                    완성된 영상이 여기에 렌더링됩니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- 갤러리 섹션 -->
+        <div class="gallery-section">
+            <h2 class="panel-title">📂 업로드 대기 동영상 보관함</h2>
+            <div class="gallery-grid" id="gallery-grid">
+                <!-- 동영상 목록 로드 -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const host = window.location.origin;
+
+        // UI 요소들
+        const baseTopicInput = document.getElementById('base-topic');
+        const langSelect = document.getElementById('lang-select');
+        const recommendBtn = document.getElementById('recommend-btn');
+        const directBtn = document.getElementById('direct-btn');
+        const loginSessionBtn = document.getElementById('login-session-btn');
+        const cardsContainer = document.getElementById('cards-container');
+        const consoleLog = document.getElementById('console-log');
+        const videoPreview = document.getElementById('video-preview');
+        const videoPlaceholder = document.getElementById('video-placeholder');
+        const galleryGrid = document.getElementById('gallery-grid');
+        const uploadBtn = document.getElementById('upload-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const imagePreviewPanel = document.getElementById('image-preview-panel');
+        const imagePreviewGrid = document.getElementById('image-preview-grid');
+        let currentTaskId = null;
+
+        // 진행 단계
+        const steps = {
+            script: document.getElementById('step-script'),
+            media: document.getElementById('step-media'),
+            audio: document.getElementById('step-audio'),
+            compile: document.getElementById('step-compile')
+        };
+
+        // 초기화
+        window.addEventListener('DOMContentLoaded', () => {
+            loadVideos();
+        });
+
+        // 1. 소주제 추천받기
+        recommendBtn.addEventListener('click', async () => {
+            const topic = baseTopicInput.value.trim();
+            if (!topic) {
+                alert('주제를 입력해주세요.');
+                return;
+            }
+
+            recommendBtn.disabled = true;
+            cardsContainer.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;margin-top:10px;">Gemini가 역사 소주제를 추천하고 있습니다...</p>';
+
+            try {
+                const response = await fetch(`${host}/api/recommend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic })
+                });
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                renderCards(data.topics);
+            } catch (err) {
+                alert(`추천 실패: ${err.message}`);
+                cardsContainer.innerHTML = '<div class="placeholder-message">오류가 발생했습니다. 다시 시도해 주세요.</div>';
+            } finally {
+                recommendBtn.disabled = false;
+            }
+        });
+
+        // 1.2 추천 없이 바로 제작하기 (다이렉트 생성)
+        directBtn.addEventListener('click', () => {
+            const topic = baseTopicInput.value.trim();
+            if (!topic) {
+                alert('주제를 입력해주세요.');
+                return;
+            }
+            if (confirm(`'${topic}' 주제로 소주제 추천 카드 없이 즉시 영상을 제작하시겠습니까?`)) {
+                startGeneration(topic, "", null, true);
+            }
+        });
+
+        // 1.3 틱톡 로그인 세션 연동 실행
+        loginSessionBtn.addEventListener('click', async () => {
+            if (!confirm("틱톡 로그인 세션 연동을 시작하시겠습니까?\n\n확인을 누르면 사용자 컴퓨터에 로그인용 브라우저 창이 직접 나타납니다.\n로그인을 마친 후 브라우저 창을 직접 닫아주시면 연동이 완료됩니다.")) {
+                return;
+            }
+            
+            loginSessionBtn.disabled = true;
+            consoleLog.textContent = '🚀 틱톡 로그인 브라우저를 실행하고 있습니다...\n';
+            resetSteps();
+            
+            // 버튼 상태 제어
+            stopBtn.style.display = 'block';
+            stopBtn.disabled = false;
+            restartBtn.style.display = 'none';
+
+            try {
+                const response = await fetch(`${host}/api/init_session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                currentTaskId = data.task_id; // Task ID 저장
+                connectSSE(data.task_id); // SSE 스트림 연결
+            } catch (err) {
+                consoleLog.textContent += `❌ 세션 연동 실패: ${err.message}\n`;
+                stopBtn.style.display = 'none';
+            } finally {
+                loginSessionBtn.disabled = false;
+            }
+        });
+
+        // 추천 카드 그리기
+        function renderCards(topics) {
+            cardsContainer.innerHTML = '';
+            topics.forEach(t => {
+                const card = document.createElement('div');
+                card.className = 'topic-card';
+                card.innerHTML = `
+                    <div class="card-badge">INDEX ${t.index}</div>
+                    <div class="card-title">${t.title}</div>
+                    <div class="card-hook">💬 훅: ${t.hook}</div>
+                `;
+                card.addEventListener('click', () => startGeneration(t.title, t.hook, t.index));
+                cardsContainer.appendChild(card);
+            });
+        }
+
+        // 타이머 제어 변수
+        let timerInterval = null;
+        let startTime = null;
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            startTime = Date.now();
+            const elapsedTimer = document.getElementById('elapsed-timer');
+            const estTime = document.getElementById('estimated-time');
+
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                elapsedTimer.textContent = `⏱️ 경과 시간: ${elapsed}초`;
+                
+                // 각 단계별 예상 남은 시간 계산
+                let est = "-";
+
+                if (steps.compile.className.includes('active')) {
+                    est = "약 15초";
+                } else if (steps.audio.className.includes('active')) {
+                    est = "약 25초";
+                } else if (steps.media.className.includes('active')) {
+                    est = "약 40초";
+                } else if (steps.script.className.includes('active')) {
+                    est = "약 55초";
+                }
+                estTime.textContent = est !== "-" ? `⏳ 예상 남은 시간: ${est}` : "⏳ 남은 시간: 계산 중";
+            }, 1000);
+        }
+
+        function stopTimer(status = 'completed') {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const elapsedTimer = document.getElementById('elapsed-timer');
+            const estTime = document.getElementById('estimated-time');
+
+            if (status === 'completed') {
+                elapsedTimer.textContent = `✅ 총 완료 시간: ${elapsed}초`;
+                estTime.textContent = `⏳ 완료됨`;
+            } else {
+                elapsedTimer.textContent = `❌ 중단됨: ${elapsed}초`;
+                estTime.textContent = `⏳ 실패`;
+            }
+        }
+
+        async function startGeneration(title, hook, index, isDirect = false) {
+            // 입력창에 선택된 카드 제목을 채워서 현재 무엇을 제작 중인지 명확히 표시합니다.
+            baseTopicInput.value = title;
+
+            const lang = langSelect.value;
+            const style = document.getElementById('style-select').value;
+            const mood = document.getElementById('mood-select').value;
+            consoleLog.textContent = '🚀 영상 생성 프로세스를 대기열에 추가하고 있습니다...\n';
+            resetSteps();
+            startTimer();
+
+            // 이미지 프리뷰 패널 초기화
+            imagePreviewPanel.style.display = 'none';
+            imagePreviewGrid.innerHTML = '';
+            
+            // 버튼 상태 제어
+            stopBtn.style.display = 'block';
+            stopBtn.disabled = false;
+            restartBtn.style.display = 'none';
+
+            try {
+                const response = await fetch(`${host}/api/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: title,
+                        hook: hook,
+                        pick: null,
+                        lang: lang,
+                        style: style,
+                        mood: mood,
+                        is_direct: isDirect
+                    })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                currentTaskId = data.task_id; // Task ID 저장
+
+                // SSE 스트림 연결
+                connectSSE(data.task_id);
+            } catch (err) {
+                consoleLog.textContent += `❌ 시작 실패: ${err.message}\n`;
+                stopTimer('failed');
+                stopBtn.style.display = 'none';
+                restartBtn.style.display = 'block';
+            }
+        }
+
+        // 3. SSE 로그 스트리밍
+        function connectSSE(taskId) {
+            const eventSource = new EventSource(`${host}/api/stream/${taskId}`);
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.line) {
+                    consoleLog.textContent += data.line + '\n';
+                    consoleLog.scrollTop = consoleLog.scrollHeight;
+                    
+                    // 로그 내용 매핑으로 실시간 하이라이팅
+                    updateProgressUI(data.line);
+                }
+                
+                if (data.status === 'completed') {
+                    consoleLog.textContent += `\n🎉 ${data.message}\n`;
+                    eventSource.close();
+                    stopTimer('completed');
+                    loadVideos();
+                } else if (data.status === 'failed') {
+                    consoleLog.textContent += `\n❌ ${data.message}\n`;
+                    eventSource.close();
+                    stopTimer('failed');
+                }
+            };
+
+            eventSource.onerror = () => {
+                eventSource.close();
+            };
+        }
+
+        // 4. 업로드 실행
+        uploadBtn.addEventListener('click', async () => {
+            if (!confirm('업로드 프로세스를 백그라운드에서 구동합니까? (Playwright 브라우저 자동 실행)')) return;
+            consoleLog.textContent = '📲 틱톡 자동 업로더 구동 중...\n';
+            
+            try {
+                const response = await fetch(`${host}/api/upload`, { method: 'POST' });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                connectSSE(data.task_id);
+            } catch (err) {
+                consoleLog.textContent += `❌ 업로더 시작 실패: ${err.message}\n`;
+            }
+        });
+
+        // 5. 완료 동영상 갤러리 로드
+        let loadedVideosList = []; // 전역 완료 동영상 리스트 캐시
+
+        async function loadVideos() {
+            try {
+                const response = await fetch(`${host}/api/videos`);
+                const data = await response.json();
+                
+                galleryGrid.innerHTML = '';
+                if (!data.videos || data.videos.length === 0) {
+                    galleryGrid.innerHTML = '<p style="color: var(--text-muted);">제작 완료된 동영상이 없습니다.</p>';
+                    return;
+                }
+
+                loadedVideosList = data.videos; // 캐시 갱신
+
+                data.videos.forEach((video, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'gallery-card';
+                    const score = video.seo_score || 0;
+                    
+                    // 점수 색상 분기 (90점 이상 초록, 70점 이상 주황, 그 외 빨강)
+                    let badgeColor = '#e63946';
+                    if (score >= 90) badgeColor = '#4af626';
+                    else if (score >= 70) badgeColor = '#fab387';
+
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap: 10px;">
+                            <div class="gallery-card-title" title="${video.filename}" style="font-weight: 700; color: white;">${video.title}</div>
+                            <span style="font-size:11px; font-weight:800; color:${badgeColor}; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:10px; border:1px solid ${badgeColor}; white-space:nowrap;">SEO ${score}점</span>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;">
+                            파일명: ${video.filename}
+                        </div>
+                        <div class="gallery-card-actions" style="margin-top:10px;">
+                            <button class="gallery-btn gallery-btn-play" onclick="playVideoByIndex(${index})">미리보기</button>
+                            <button class="gallery-btn gallery-btn-upload" onclick="uploadSingleVideo('${video.filename}')" style="background: rgba(74, 246, 38, 0.15); color: #4af626; border: 1px solid #4af626;">📲 딸깍 업로드</button>
+                        </div>
+                    `;
+                    galleryGrid.appendChild(card);
+                });
+            } catch (err) {
+                console.log('비디오 로드 오류', err);
+            }
+        }
+
+        async function uploadSingleVideo(filename) {
+            if (!confirm(`'${filename}' 영상을 채널(유튜브/틱톡)에 즉시 자동 업로드하시겠습니까?\n\nAI가 기획한 SEO 최적화 메타데이터와 태그가 그대로 연동되어 업로드됩니다.`)) return;
+            consoleLog.textContent = `📲 개별 영상 자동 업로드 시작: ${filename}...\n`;
+            resetSteps();
+            
+            // 버튼 상태
+            stopBtn.style.display = 'block';
+            stopBtn.disabled = false;
+            restartBtn.style.display = 'none';
+
+            try {
+                const response = await fetch(`${host}/api/upload_single`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                
+                currentTaskId = data.task_id;
+                connectSSE(data.task_id);
+            } catch (err) {
+                consoleLog.textContent += `❌ 업로드 시작 실패: ${err.message}\n`;
+            }
+        }
+
+        function playVideoByIndex(index) {
+            const video = loadedVideosList[index];
+            if (!video) return;
+
+            videoPlaceholder.style.display = 'none';
+            videoPreview.style.display = 'block';
+            videoPreview.src = `${host}/api/video/${video.filename}`;
+            videoPreview.play();
+            videoPreview.scrollIntoView({ behavior: 'smooth' });
+
+            // 우측 SEO 패널에 정보 매핑
+            updateSEODial(video.seo_score, video.tags, video.triple_keywords);
+        }
+
+        function playVideo(filename) {
+            videoPlaceholder.style.display = 'none';
+            videoPreview.style.display = 'block';
+            videoPreview.src = `${host}/api/video/${filename}`;
+            videoPreview.play();
+            videoPreview.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // UI 유틸
+        function resetSteps() {
+            Object.values(steps).forEach(s => s.className = 'progress-step');
+        }
+
+        function updateProgressUI(line) {
+            if (line.includes('대본을 작성하고 있습니다')) {
+                steps.script.className = 'progress-step active';
+            } else if (line.includes('대본 완성')) {
+                steps.script.className = 'progress-step completed';
+            } else if (line.includes('미디어 수집 중')) {
+                steps.media.className = 'progress-step active';
+            } else if (line.includes('미디어 수집 완료') || line.includes('음성 생성 중')) {
+                steps.media.className = 'progress-step completed';
+                steps.audio.className = 'progress-step active';
+            } else if (line.includes('음성 생성 완료')) {
+                steps.audio.className = 'progress-step completed';
+            } else if (line.includes('최종 영상 렌더링 중')) {
+                steps.compile.className = 'progress-step active';
+            } else if (line.includes('영상 제작 완료')) {
+                steps.compile.className = 'progress-step completed';
+            }
+
+            // 실시간 SEO 계산 완료 출력 파싱
+            if (line.includes('SEO 최적화 메타데이터 JSON 저장 완료')) {
+                const scoreMatch = line.match(/SEO 점수:\s*(\d+)점/);
+                if (scoreMatch) {
+                    const score = parseInt(scoreMatch[1]);
+                    updateSEODial(score);
+                }
+            }
+        }
+
+        function updateSEODial(score, tags = [], tripleKeywords = []) {
+            const dialPanel = document.getElementById('seo-dial-panel');
+            const circleBar = document.getElementById('seo-circle-bar');
+            const dialText = document.getElementById('seo-dial-text');
+            const dialTitle = document.getElementById('seo-dial-title');
+            const dialDesc = document.getElementById('seo-dial-desc');
+            const keywordsBox = document.getElementById('seo-keywords-box');
+            const tripleTagsContainer = document.getElementById('seo-triple-tags');
+            const allTagsContainer = document.getElementById('seo-all-tags');
+
+            dialPanel.style.display = 'flex';
+            dialText.textContent = score;
+
+            // svg dash offset 계산 (r=40 이므로 둘레 = 2 * pi * 40 = 251.2)
+            const circumference = 251.2;
+            const offset = circumference - (score / 100) * circumference;
+            circleBar.style.strokeDashoffset = offset;
+
+            // 점수별 테마 색상 설정
+            let strokeColor = '#e63946'; // 빨강
+            let grade = '보통';
+            if (score >= 90) {
+                strokeColor = '#4af626'; // 초록
+                grade = '최적화 완료 (비디오 노출 극대화)';
+            } else if (score >= 70) {
+                strokeColor = '#fab387'; // 주황
+                grade = '우수 (메타데이터 양호)';
+            }
+            circleBar.style.stroke = strokeColor;
+
+            dialTitle.textContent = `vidIQ SEO 점수: ${score}점`;
+            dialTitle.style.color = strokeColor;
+            dialDesc.textContent = `유튜브 공식 검색 엔진 최적화(SEO) 점수 ${score}점을 획득했습니다. 제목/설명란 키워드와 태그 배치 분석이 실시간 통과되었습니다. (등급: ${grade})`;
+
+            // 🎯 키워드 칩 렌더링
+            if (tags.length > 0 || tripleKeywords.length > 0) {
+                keywordsBox.style.display = 'flex';
+                
+                // 트리플 키워드 렌더링
+                tripleTagsContainer.innerHTML = '';
+                if (tripleKeywords.length === 0) {
+                    tripleTagsContainer.innerHTML = '<span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">매칭된 트리플 키워드가 없습니다.</span>';
+                } else {
+                    tripleKeywords.forEach(kw => {
+                        const chip = document.createElement('span');
+                        chip.className = 'seo-chip triple';
+                        chip.textContent = `#${kw}`;
+                        tripleTagsContainer.appendChild(chip);
+                    });
+                }
+                
+                // 전체 태그 목록 렌더링
+                allTagsContainer.innerHTML = '';
+                if (tags.length === 0) {
+                    allTagsContainer.innerHTML = '<span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">추천 태그가 생성되지 않았습니다.</span>';
+                } else {
+                    tags.forEach(tg => {
+                        const chip = document.createElement('span');
+                        chip.className = 'seo-chip';
+                        chip.textContent = tg.startsWith('#') ? tg : `#${tg}`;
+                        allTagsContainer.appendChild(chip);
+                    });
+                }
+            } else {
+                keywordsBox.style.display = 'none';
+            }
+        }
+
+        // 6. 중지 및 다시시작 제어
+        stopBtn.addEventListener('click', async () => {
+            if (!currentTaskId) return;
+            stopBtn.disabled = true;
+            consoleLog.textContent += `\n🛑 작업을 강제 중지하고 있습니다...\n`;
+            try {
+                const response = await fetch(`${host}/api/stop/${currentTaskId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.status === 'stopped') {
+                    consoleLog.textContent += `✅ 작업이 성공적으로 중지되었습니다.\n`;
+                    stopTimer('failed');
+                } else {
+                    consoleLog.textContent += `❌ 중지 실패: ${data.error || '알 수 없는 오류'}\n`;
+                }
+            } catch (err) {
+                consoleLog.textContent += `❌ 중지 실패: ${err.message}\n`;
+            } finally {
+                stopBtn.style.display = 'none';
+                restartBtn.style.display = 'block';
+            }
+        });
+
+        restartBtn.addEventListener('click', () => {
+            resetAllUI();
+        });
+
+        baseTopicInput.addEventListener('input', () => {
+            resetAllUI();
+        });
+
+        function resetAllUI() {
+            // 소주제 추천 카드 초기화
+            cardsContainer.innerHTML = `
+                <div class="placeholder-message">
+                    주제를 입력하고 'AI 소주제 추천받기' 버튼을 누르시면 여기에 추천 카드가 표시됩니다.
+                </div>
+            `;
+            // 진행 상태 및 타이머 초기화
+            resetSteps();
+            stopTimer('failed');
+            document.getElementById('elapsed-timer').textContent = '⏱️ 대기 중';
+            document.getElementById('estimated-time').textContent = '⏳ 남은 시간: -';
+            
+            // 실시간 이미지 프리뷰 패널 비우기 및 숨김
+            imagePreviewPanel.style.display = 'none';
+            imagePreviewGrid.innerHTML = '';
+            
+            // SEO 다이얼 패널 초기화
+            document.getElementById('seo-dial-panel').style.display = 'none';
+            document.getElementById('seo-circle-bar').style.strokeDashoffset = 251.2;
+            document.getElementById('seo-dial-text').textContent = '0';
+
+            // 콘솔 로그 초기화
+            consoleLog.textContent = '대기 중...';
+            
+            // 플레이어 숨김
+            videoPreview.style.display = 'none';
+            videoPlaceholder.style.display = 'block';
+            videoPreview.src = '';
+            
+            // 제어 버튼 초기화
+            stopBtn.style.display = 'none';
+            restartBtn.style.display = 'none';
+            currentTaskId = null;
+        }
+    </script>
+</body>
+</html>
