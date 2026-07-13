@@ -638,6 +638,7 @@
         <input type="password" id="access_code" placeholder="마스터 코드 입력">
         <button onclick="unlock()">인증 완료 및 대시보드 진입</button>
         <button onclick="requestWifiCode()" style="background: linear-gradient(45deg, #2ec4b6, #0cb0a0); margin-top: 8px; font-weight: 700;">📲 동일 와이파이 원클릭 간편인증</button>
+        <button onclick="skipAuth()" style="background: transparent; color: var(--accent); border: 1px solid var(--border-color); margin-top: 8px; font-weight: 700;">⏩ 인증 스킵하고 진입 (컴퓨터 없음)</button>
         <p id="auth_msg" style="color: var(--primary); margin-top: 15px; font-weight: 600;"></p>
     </div>
 
@@ -1292,6 +1293,14 @@
 
         async function checkAutoLogin(savedCode) {
             if (!savedCode) return;
+            if (savedCode === 'skipped') {
+                masterCode = 'skipped';
+                document.getElementById('gatekeeper').style.display = 'none';
+                document.getElementById('main_ui').style.display = 'block';
+                loadVideos();
+                syncSubscriptionStatus();
+                return;
+            }
             try {
                 const res = await fetch(`${host}/api/verify_code`, {
                     method: 'POST',
@@ -1313,6 +1322,18 @@
             } catch (e) {
                 console.log("자동 로그인 확인 실패:", e);
             }
+        }
+
+        function skipAuth() {
+            localStorage.setItem('master_code', 'skipped');
+            if (window.AndroidBridge) {
+                window.AndroidBridge.saveMasterCode('skipped');
+            }
+            masterCode = 'skipped';
+            document.getElementById('gatekeeper').style.display = 'none';
+            document.getElementById('main_ui').style.display = 'block';
+            loadVideos();
+            syncSubscriptionStatus();
         }
 
         function injectSavedMasterCode(code) {
