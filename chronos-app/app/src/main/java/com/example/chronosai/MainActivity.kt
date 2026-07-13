@@ -135,6 +135,30 @@ fun ChronosAppContent(
                                 val sharedPref = context.getSharedPreferences("chronos_settings", Context.MODE_PRIVATE)
                                 sharedPref.edit().putString("master_code", code).apply()
                             }
+
+                            @android.webkit.JavascriptInterface
+                            fun savePhoneRecord(recordJson: String) {
+                                try {
+                                    val file = java.io.File(context.filesDir, "chronos_generation_records.json")
+                                    val existingData = if (file.exists()) file.readText() else "[]"
+                                    val jsonArray = org.json.JSONArray(existingData)
+                                    val newRecord = org.json.JSONObject(recordJson)
+                                    jsonArray.put(newRecord)
+                                    file.writeText(jsonArray.toString(2))
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+
+                            @android.webkit.JavascriptInterface
+                            fun getPhoneRecords(): String {
+                                return try {
+                                    val file = java.io.File(context.filesDir, "chronos_generation_records.json")
+                                    if (file.exists()) file.readText() else "[]"
+                                } catch (e: Exception) {
+                                    "[]"
+                                }
+                            }
                         }
                         addJavascriptInterface(WebAppInterface(), "AndroidBridge")
                         

@@ -1219,6 +1219,17 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 모바일 전용 로컬 저장소 기록 모니터 -->
+            <div id="phone-records-panel" class="panel" style="display: none; margin-top: 20px;">
+                <h2 class="panel-title">📱 스마트폰 로컬 역사 생성 기록 (기기 단독 저장됨)</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                    이 스마트폰에서 직접 기획 및 생성 지시한 동영상/무인 모드 가동 히스토리가 내부 파일에 안전하게 보존됩니다.
+                </p>
+                <div id="phone-records-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;">
+                    <!-- 로컬 파일 기록 목록 렌더링 -->
+                </div>
+            </div>
         </div>
 
     </div>
@@ -1642,6 +1653,42 @@
 
             if (tabId === 'dashboard') {
                 loadVideos();
+            } else if (tabId === 'settings') {
+                loadPhoneRecordsUI();
+            }
+        }
+
+        function loadPhoneRecordsUI() {
+            if (window.AndroidBridge && typeof window.AndroidBridge.getPhoneRecords === 'function') {
+                const panel = document.getElementById('phone-records-panel');
+                const listEl = document.getElementById('phone-records-list');
+                if (panel && listEl) {
+                    panel.style.display = 'block';
+                    try {
+                        const recordsRaw = window.AndroidBridge.getPhoneRecords();
+                        const records = JSON.parse(recordsRaw || "[]");
+                        listEl.innerHTML = "";
+                        if (records.length === 0) {
+                            listEl.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:20px;">스마트폰 기기 로컬 생성 기록이 아직 존재하지 않습니다.</div>';
+                            return;
+                        }
+                        records.reverse().forEach(rec => {
+                            const item = document.createElement('div');
+                            item.style = 'background: white; border: 1px solid var(--border-color); padding: 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);';
+                            item.innerHTML = `
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="font-size:13px; font-weight:700; color:var(--accent);">${rec.type || '제작'}</span>
+                                    <span style="font-size:11px; color:var(--text-muted);">${rec.time_formatted || rec.timestamp}</span>
+                                </div>
+                                <div style="font-size:12px; font-weight:600; color:var(--primary); word-break:break-all;">주제: ${rec.topic}</div>
+                                ${rec.coupang_mode ? '<div style="font-size:10px; color:#10b981; font-weight:700;">💸 쿠팡 파트너스 연계 작동</div>' : ''}
+                            `;
+                            listEl.appendChild(item);
+                        });
+                    } catch(e) {
+                        listEl.innerHTML = '<div style="font-size:12px; color:red;">기록 로드 실패</div>';
+                    }
+                }
             }
         }
 
@@ -1924,6 +1971,17 @@
                         currentTaskId = data.task_id;
                         startFactoryBtn.innerText = "🏭 공장 가동 중";
                         startFactoryBtn.style.background = "linear-gradient(45deg, #FF6B6B, #FF8E53)";
+                        if (window.AndroidBridge && typeof window.AndroidBridge.savePhoneRecord === 'function') {
+                            try {
+                                window.AndroidBridge.savePhoneRecord(JSON.stringify({
+                                    topic: "30분 연속 공장 모드",
+                                    timestamp: new Date().toISOString(),
+                                    time_formatted: new Date().toLocaleString(),
+                                    type: '공장 모드 가동',
+                                    coupang_mode: coupangMode
+                                }));
+                            } catch(e) { console.error(e); }
+                        }
                         connectSSE(data.task_id, true);
                     } else {
                         alert(data.error || "공장 가동 시작 실패");
@@ -1969,6 +2027,17 @@
                             startSchedulerBtn.disabled = false;
                             startSchedulerBtn.innerText = "🛑 무인 엔진 중지";
                             startSchedulerBtn.style.background = "linear-gradient(45deg, #ef4444, #dc2626)";
+                            if (window.AndroidBridge && typeof window.AndroidBridge.savePhoneRecord === 'function') {
+                                try {
+                                    window.AndroidBridge.savePhoneRecord(JSON.stringify({
+                                        topic: "24시간 무인 가동 엔진",
+                                        timestamp: new Date().toISOString(),
+                                        time_formatted: new Date().toLocaleString(),
+                                        type: '24시간 무인 엔진 가동',
+                                        coupang_mode: coupangMode
+                                    }));
+                                } catch(e) { console.error(e); }
+                            }
                             connectSSE(data.task_id, true);
                         } else {
                             alert(data.error || "엔진 시작 실패");
@@ -2162,6 +2231,17 @@
                 }
 
                 currentTaskId = data.task_id; // Task ID 저장
+                if (window.AndroidBridge && typeof window.AndroidBridge.savePhoneRecord === 'function') {
+                    try {
+                        window.AndroidBridge.savePhoneRecord(JSON.stringify({
+                            topic: title,
+                            timestamp: new Date().toISOString(),
+                            time_formatted: new Date().toLocaleString(),
+                            type: '일반 영상 제작',
+                            coupang_mode: coupangMode
+                        }));
+                    } catch(e) { console.error(e); }
+                }
 
                 // SSE 스트림 연결
                 connectSSE(data.task_id);
