@@ -38,8 +38,9 @@ class Scene(BaseModel):
     scene_num: int
     narration: str = Field(description="반드시 공백 포함 27자 이내!!")
     subtitle: str = Field(description="반드시 공백 포함 27자 이내!!")
-    image_query: str
-    video_query: str
+    image_query: str = Field(description="위키미디어(Wikimedia Commons) 실제 고증 이미지 검색용 1~3단어 영문 핵심 키워드 (예: 'Kim Ju-ae', 'North Korea map', 'Kim Jong-un')")
+    video_query: str = Field(description="스톡 비디오 사이트 검색용 1~3단어 영문 핵심 키워드 (예: 'North Korea military', 'Pyongyang street')")
+    ai_prompt: str = Field(description="AI 이미지/비디오 생성용 묘사 영어 프롬프트 (예: 'A photorealistic, tense close-up of a young North Korean girl's eyes...')")
     bg_color: str = "#1a1a2e"
     duration_sec: int = 3
     is_hook: bool = False
@@ -112,6 +113,10 @@ def generate_script(topic_title: str, hook: str, style: str = "photorealistic", 
 1. 분량: 정확히 {num_scenes}개 장면 (씬당 3초 고정)
 2. 27자의 법칙: 모든 'narration'과 'subtitle'은 반드시 공백 포함 **27자 이내**로 작성.
 3. SEO 100점: vidIQ 100점 기준 (제목 키워드 전방 배치, 설명란 키워드 3회 반복, 태그 450자).
+4. 검색용 키워드 분리:
+   - 각 장면의 `image_query`는 위키미디어 Commons 등 실제 이미지 스톡 사이트에서 고증 사진을 검색하기 위한 **1~3단어 영어 핵심 명사 키워드 (예: 'Kim Ju-ae', 'Kim Jong-un', 'North Korea map', 'Pyongyang')** 여야 합니다. 절대 길고 복잡한 프롬프트를 적지 마세요.
+   - 각 장면의 `video_query`는 스톡 비디오 검색을 위한 **1~3단어 영어 핵심 명사 키워드 (예: 'military parade', 'palace', 'korean border')** 여야 합니다.
+   - 각 장면의 `ai_prompt`는 만약 1단계 고증 검색 실패 시, AI가 직접 그리기 위한 **구체적이고 극사실적인 고화질 영어 묘사 프롬프트 (예: 'A photorealistic close-up of a young North Korean girl...')** 를 작성하세요.
 {instruction}
 
 반드시 위 규칙을 지켜 JSON으로 반환하세요.

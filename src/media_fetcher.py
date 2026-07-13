@@ -504,6 +504,7 @@ def fetch_scene_media(scene: dict, scene_index: int, temp_dir: str, media_type: 
     """
     image_query = scene.get("image_query", "")
     video_query = scene.get("video_query", "")
+    ai_prompt = scene.get("ai_prompt", image_query)
     duration_sec = scene.get("duration_sec", 6)
     
     ref_image_path = os.path.join(temp_dir, f"scene_ref_{scene_index}.jpg")
@@ -515,9 +516,9 @@ def fetch_scene_media(scene: dict, scene_index: int, temp_dir: str, media_type: 
     if media_type == "video":
         print(f"    [Media] [INFO] AI 동영상 전용 모드 구동 중 (Scene {scene_index + 1})")
         # 1. Google Veo AI 동영상 생성 (유일한 영상 소스)
-        if image_query:
+        if ai_prompt:
             print(f"    [Media] [INFO] Google Veo AI 동영상 생성 시도...")
-            if generate_ai_video(image_query, final_video_path, duration_sec, aspect_ratio):
+            if generate_ai_video(ai_prompt, final_video_path, duration_sec, aspect_ratio):
                 return {"type": "video", "path": final_video_path}
             else:
                 print(f"    [Media] [WARN] Veo 동영상 생성 실패. AI 이미지(Ken Burns) 폴백으로 전환합니다.")
@@ -539,7 +540,7 @@ def fetch_scene_media(scene: dict, scene_index: int, temp_dir: str, media_type: 
     # 2단계: 고증 레퍼런스가 존재할 시 해당 이미지를 기반으로 Gemini AI 동영상(프레임) 생성
     if has_ref:
         print(f"    [Media] [INFO] 2단계: 실제 고증 사진을 기반으로 Gemini AI 비디오 프레임 재생성 시도...")
-        if generate_ai_image_from_reference(ref_image_path, image_query, final_image_path, aspect_ratio):
+        if generate_ai_image_from_reference(ref_image_path, ai_prompt, final_image_path, aspect_ratio):
             # 사용이 끝난 레퍼런스 파일 삭제
             if os.path.exists(ref_image_path):
                 try: os.remove(ref_image_path)
@@ -547,9 +548,9 @@ def fetch_scene_media(scene: dict, scene_index: int, temp_dir: str, media_type: 
             return {"type": "image", "path": final_image_path}
             
     # 3단계: 고증 레퍼런스가 부재할 시 기본 프롬프트를 사용하여 AI 이미지로 대체 창작
-    if image_query:
+    if ai_prompt:
         print(f"    [Media] [INFO] 3단계: 고증 사진 없음 → 프롬프트 기반 기본 AI 이미지 생성...")
-        if generate_ai_image(image_query, final_image_path, aspect_ratio):
+        if generate_ai_image(ai_prompt, final_image_path, aspect_ratio):
             return {"type": "image", "path": final_image_path}
 
     # 최후 폴백: None (black background 사용)
