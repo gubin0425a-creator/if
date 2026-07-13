@@ -3,13 +3,3 @@
 temp/  
 __pycache__/  
 .venv/ 
-videos_to_upload/
-completed/
-subtitles/
-client_secrets.json
-chrome_profile/
-.idea/
-*.mp4
-*.mp3
-last_topic.txt
-scratch/

@@ -103,22 +103,6 @@ def generate_script(topic_title: str, hook: str, style: str = "photorealistic", 
     else:
         instruction = "\n- 4개 장면의 핵심 요약 쇼츠 형태로 구성할 것."
 
-    # 바이럴 최적화 지침서 로드 및 주입
-    optimization_guidelines = ""
-    try:
-        skill_path = os.path.join(os.path.dirname(__file__), '..', '.agents', 'skills', 'viral_video_optimization', 'SKILL.md')
-        if os.path.exists(skill_path):
-            with open(skill_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                # YAML frontmatter 제거
-                if content.startswith("---"):
-                    parts = content.split("---", 2)
-                    if len(parts) >= 3:
-                        content = parts[2].strip()
-                optimization_guidelines = f"\n[바이럴 비디오 최적화 지침서]\n{content}\n"
-    except Exception as e:
-        print(f"Error loading optimization skill: {e}")
-
     prompt = f"""
 당신은 유튜브 알고리즘을 파괴하는 평행세계 다큐 작가입니다.
 주제: "{topic_title}" (훅: {hook})
@@ -129,7 +113,6 @@ def generate_script(topic_title: str, hook: str, style: str = "photorealistic", 
 2. 27자의 법칙: 모든 'narration'과 'subtitle'은 반드시 공백 포함 **27자 이내**로 작성.
 3. SEO 100점: vidIQ 100점 기준 (제목 키워드 전방 배치, 설명란 키워드 3회 반복, 태그 450자).
 {instruction}
-{optimization_guidelines}
 
 반드시 위 규칙을 지켜 JSON으로 반환하세요.
 """

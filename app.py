@@ -22,307 +22,13 @@ CORS(app)
 # 초기 코드 생성 및 출력
 SecurityManager.get_current_code()
 
-# 동일 와이파이 자동인증 제한 데이터 관리
-ISSUED_CODES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "issued_codes.json")
-
-def load_issued_codes():
-    if os.path.exists(ISSUED_CODES_FILE):
-        try:
-            with open(ISSUED_CODES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {}
-
-def save_issued_codes(data):
-    try:
-        os.makedirs(os.path.dirname(ISSUED_CODES_FILE), exist_ok=True)
-        with open(ISSUED_CODES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print("Error saving issued codes:", e)
-
-# 서버 공인 IP 캐싱
-_server_public_ip = ""
-def get_server_public_ip():
-    global _server_public_ip
-    if not _server_public_ip:
-        try:
-            import urllib.request
-            _server_public_ip = urllib.request.urlopen('https://api.ipify.org', timeout=3).read().decode('utf8').strip()
-        except:
-            pass
-    return _server_public_ip
-
 @app.route('/api/verify_code', methods=['POST'])
 def verify_code():
     data = request.json or {}
     code = data.get("code", "")
     if SecurityManager.verify_code(code):
-        # PC에서 검증 성공 시 PC의 외부/로컬 IP를 active_pc_ip로 등록
-        client_ip = request.remote_addr
-        if request.headers.getlist("X-Forwarded-For"):
-            client_ip = request.headers.getlist("X-Forwarded-For")[0]
-            
-        gating = load_gating()
-        gating["active_pc_ip"] = client_ip
-        save_gating(gating)
         return jsonify({"status": "success", "message": "마스터 코드가 인증되었습니다."})
     return jsonify({"status": "error", "message": "잘못된 코드입니다."}), 403
-
-@app.route('/api/issue_code', methods=['POST'])
-def issue_code():
-    """같은 와이파이(로컬 혹은 같은 외부 IP) 조건 하에 하루 1회 1기기에 마스터 코드 발급"""
-    data = request.json or {}
-    device_id = data.get("device_id", "").strip()
-    if not device_id:
-        return jsonify({"error": "기기 식별자(device_id)가 누락되었습니다."}), 400
-
-    client_ip = request.remote_addr
-    if request.headers.getlist("X-Forwarded-For"):
-        client_ip = request.headers.getlist("X-Forwarded-For")[0]
-
-    # 1. 와이파이(네트워크) 대조
-    # 로컬 IP 접두사
-    private_prefixes = ("127.", "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "localhost", "::1")
-    
-    gating = load_gating()
-    active_pc_ip = gating.get("active_pc_ip", "")
-    server_pub = get_server_public_ip()
-    
-    is_wifi_matched = False
-    
-    # 로컬 네트워크 접속인 경우 통과
-    if any(client_ip.startswith(prefix) for prefix in private_prefixes):
-        is_wifi_matched = True
-    # 또는 클라우드 상에서 검사: 클라이언트 공인 IP가 PC 공인 IP와 같거나 서버 공인 IP와 같은 경우
-    elif active_pc_ip and client_ip == active_pc_ip:
-        is_wifi_matched = True
-    elif server_pub and client_ip == server_pub:
-        is_wifi_matched = True
-
-    if not is_wifi_matched:
-        return jsonify({"error": "동일한 와이파이(같은 IP 네트워크) 환경에 접속되어 있어야 코드를 발급받을 수 있습니다."}), 403
-
-    # 2. 기기당 일일 1회 제한 검사
-    today = time.strftime('%Y-%m-%d')
-    issued = load_issued_codes()
-    
-    last_issue_date = issued.get(device_id)
-    if last_issue_date == today:
-        return jsonify({"error": "본 기기는 오늘 이미 인증코드를 발급받았습니다. (1일 1회만 발급 가능)"}), 403
-
-    # 발급 기록 및 현재 마스터 코드 반환
-    issued[device_id] = today
-    save_issued_codes(issued)
-    
-    code = SecurityManager.get_current_code()
-    return jsonify({"code": code})
-
-# 근거리 기기 리스트 및 간편인증 요청 상태
-active_devices = {}  # { device_id: { name, type, ip, last_ping } }
-pending_approvals = {} # { to_device_id: { from_device_id, from_name, status, code } }
-
-@app.route('/api/device/register', methods=['POST'])
-def register_device():
-    data = request.json or {}
-    device_id = data.get("device_id", "").strip()
-    device_name = data.get("device_name", "").strip()
-    client_type = data.get("client_type", "").strip() # 'pc' or 'mobile'
-    
-    if not device_id or not device_name or not client_type:
-        return jsonify({"error": "필수 파라미터가 누락되었습니다."}), 400
-        
-    client_ip = request.remote_addr
-    if request.headers.getlist("X-Forwarded-For"):
-        client_ip = request.headers.getlist("X-Forwarded-For")[0]
-        
-    active_devices[device_id] = {
-        "name": device_name,
-        "type": client_type,
-        "ip": client_ip,
-        "last_ping": time.time()
-    }
-    
-    # Clean up old devices (older than 30 seconds)
-    now = time.time()
-    for k in list(active_devices.keys()):
-        if now - active_devices[k]["last_ping"] > 30:
-            active_devices.pop(k, None)
-            
-    return jsonify({"status": "registered"})
-
-@app.route('/api/device/nearby', methods=['GET'])
-def get_nearby_devices():
-    """같은 와이파이/네트워크(IP 대역) 상의 활성 PC 기기들을 리턴"""
-    client_ip = request.remote_addr
-    if request.headers.getlist("X-Forwarded-For"):
-        client_ip = request.headers.getlist("X-Forwarded-For")[0]
-        
-    private_prefixes = ("127.", "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "localhost", "::1")
-    
-    gating = load_gating()
-    active_pc_ip = gating.get("active_pc_ip", "")
-    server_pub = get_server_public_ip()
-    
-    now = time.time()
-    nearby = []
-    
-    for dev_id, dev in list(active_devices.items()):
-        if now - dev["last_ping"] < 30 and dev["type"] == "pc":
-            is_same = False
-            # 로컬망 대조
-            if any(client_ip.startswith(prefix) for prefix in private_prefixes) and any(dev["ip"].startswith(prefix) for prefix in private_prefixes):
-                is_same = True
-            # 또는 공인 IP 대조
-            elif client_ip == dev["ip"]:
-                is_same = True
-            elif active_pc_ip and dev["ip"] == active_pc_ip:
-                is_same = True
-            elif server_pub and dev["ip"] == server_pub:
-                is_same = True
-                
-            if is_same:
-                nearby.append({
-                    "device_id": dev_id,
-                    "name": dev["name"]
-                })
-                
-    return jsonify({"devices": nearby})
-
-@app.route('/api/device/request_approval', methods=['POST'])
-def request_approval():
-    data = request.json or {}
-    from_id = data.get("from_device_id", "").strip()
-    to_id = data.get("to_device_id", "").strip()
-    from_name = data.get("from_name", "스마트폰 기기").strip()
-    
-    if not from_id or not to_id:
-        return jsonify({"error": "파라미터가 누락되었습니다."}), 400
-        
-    pending_approvals[to_id] = {
-        "from_device_id": from_id,
-        "from_name": from_name,
-        "status": "pending",
-        "code": ""
-    }
-    return jsonify({"status": "requested"})
-
-@app.route('/api/device/check_requests', methods=['GET'])
-def check_requests():
-    device_id = request.args.get("device_id", "").strip()
-    if not device_id:
-        return jsonify({"error": "device_id가 필요합니다."}), 400
-        
-    req = pending_approvals.get(device_id)
-    if req and req["status"] == "pending":
-        return jsonify({
-            "has_request": True,
-            "from_device_id": req["from_device_id"],
-            "from_name": req["from_name"]
-        })
-    return jsonify({"has_request": False})
-
-@app.route('/api/device/approve', methods=['POST'])
-def approve_request():
-    data = request.json or {}
-    pc_id = data.get("device_id", "").strip()
-    action = data.get("action", "").strip() # 'approve' or 'reject'
-    
-    if not pc_id or pc_id not in pending_approvals:
-        return jsonify({"error": "요청이 존재하지 않거나 만료되었습니다."}), 404
-        
-    req = pending_approvals[pc_id]
-    if action == "approve":
-        req["status"] = "approved"
-        req["code"] = SecurityManager.get_current_code()
-    else:
-        req["status"] = "rejected"
-        
-    return jsonify({"status": "processed"})
-
-@app.route('/api/device/approval_status', methods=['GET'])
-def get_approval_status():
-    device_id = request.args.get("device_id", "").strip()
-    if not device_id:
-        return jsonify({"error": "device_id가 필요합니다."}), 400
-        
-    for pc_id, req in list(pending_approvals.items()):
-        if req["from_device_id"] == device_id:
-            if req["status"] == "approved":
-                code = req["code"]
-                pending_approvals.pop(pc_id, None)
-                return jsonify({"status": "approved", "code": code})
-            elif req["status"] == "rejected":
-                pending_approvals.pop(pc_id, None)
-                return jsonify({"status": "rejected"})
-            else:
-                return jsonify({"status": "pending"})
-                
-    return jsonify({"status": "not_found"})
-
-# 요금제 제한(Gating) 데이터 관리
-GATING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "user_gating.json")
-
-def load_gating():
-    if os.path.exists(GATING_FILE):
-        try:
-            with open(GATING_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {
-        "user_role": "free",  # free, pro, mega, mega_hyper, infinity_hyper
-        "last_generation_time": 0.0,
-        "daily_upload_count": 0,
-        "last_upload_date": time.strftime('%Y-%m-%d')
-    }
-
-def save_gating(data):
-    os.makedirs(os.path.dirname(GATING_FILE), exist_ok=True)
-    with open(GATING_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-@app.route('/api/subscription', methods=['GET', 'POST'])
-def manage_subscription():
-    gating = load_gating()
-    # 날짜 갱신 시 업로드 한도 초기화
-    today = time.strftime('%Y-%m-%d')
-    if gating.get("last_upload_date") != today:
-        gating["last_upload_date"] = today
-        gating["daily_upload_count"] = 0
-        save_gating(gating)
-
-    if request.method == 'POST':
-        data = request.json or {}
-        role = data.get("role", "free")
-        if role in ["free", "pro", "mega", "mega_hyper", "infinity_hyper"]:
-            gating["user_role"] = role
-            save_gating(gating)
-            return jsonify({"status": "success", "role": role})
-        return jsonify({"error": "잘못된 요금제 등급입니다."}), 400
-        
-    return jsonify({
-        "role": gating.get("user_role", "free"),
-        "last_generation_time": gating.get("last_generation_time", 0.0),
-        "daily_upload_count": gating.get("daily_upload_count", 0),
-        "cooldown_remaining": max(0, int(5400 - (time.time() - gating.get("last_generation_time", 0.0))))
-    })
-
-@app.route('/api/version', methods=['GET'])
-def get_version():
-    v_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
-    if os.path.exists(v_path):
-        try:
-            with open(v_path, "r", encoding="utf-8") as f:
-                return jsonify(json.load(f))
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    return jsonify({
-        "version": "4.0.4",
-        "release_date": "2026-07-13",
-        "changelog": ["이전 버전 동기화 릴리즈"]
-    })
 
 @app.route('/mobile')
 def mobile_index():
@@ -341,89 +47,22 @@ def start_factory():
     if not SecurityManager.verify_code(code):
         return jsonify({"error": "보안 인증이 필요합니다."}), 403
 
-    gating = load_gating()
-    if gating.get("user_role") == "free":
-        return jsonify({"error": "풀-오토 공장 모드는 FREE 플랜에서 사용할 수 없습니다. 플랜을 업그레이드하세요."}), 403
-
-    coupang_mode = data.get("coupang_mode", False)
     task_id = str(uuid.uuid4())
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
 
+    # 팩토리 로직은 gui.py의 start_automation_factory를 참고하여 별도 스크립트나 로직으로 구현 가능
+    # 여기서는 간단히 generate_video_v2를 3번 호출하는 백그라운드 래퍼 실행 가능
+    # 일단 gui.py의 로직을 흉내내는 cmd 구성
     cmd = [
-        sys.executable,
+        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
         "-u",
-        os.path.join(BASE_DIR, "tools", "factory_worker.py"),
-        "--mode", "factory"
+        os.path.join(BASE_DIR, "generate_video_v2.py"),
+        "--topic", "자동 추천", # 엔진 내부에서 처리됨
+        "--long-form" # 롱폼/바이럴 모드 가상화
     ]
-    if coupang_mode:
-        cmd.append("--coupang-mode")
+    # 실제 공장 모드 구현을 위해 별도 스크립트 tools/factory_worker.py를 만들 수도 있음
 
-    log_file = open(log_path, "w", encoding="utf-8")
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=BASE_DIR,
-            text=True,
-            env=dict(os.environ, PYTHONIOENCODING="utf-8")
-        )
-        active_tasks[task_id] = {
-            "process": proc,
-            "log_file": log_file,
-            "topic": "30분 공장 모드 가동",
-            "lang": "ko"
-        }
-        return jsonify({"task_id": task_id, "status": "started"})
-    except Exception as e:
-        log_file.close()
-        return jsonify({"error": f"공장 프로세스 시작 실패: {str(e)}"}), 500
-
-@app.route('/api/scheduler', methods=['POST'])
-def start_scheduler():
-    """24시간 무인 자동화 엔진 가동 API"""
-    data = request.json or {}
-    code = data.get("code", "")
-    if not SecurityManager.verify_code(code):
-        return jsonify({"error": "보안 인증이 필요합니다."}), 403
-
-    gating = load_gating()
-    if gating.get("user_role") == "free":
-        return jsonify({"error": "24시간 자동 업로드 엔진은 FREE 플랜에서 사용할 수 없습니다. 플랜을 업그레이드하세요."}), 403
-
-    coupang_mode = data.get("coupang_mode", False)
-    task_id = str(uuid.uuid4())
-    log_path = os.path.join(LOG_DIR, f"{task_id}.log")
-
-    cmd = [
-        sys.executable,
-        "-u",
-        os.path.join(BASE_DIR, "tools", "factory_worker.py"),
-        "--mode", "24h"
-    ]
-    if coupang_mode:
-        cmd.append("--coupang-mode")
-
-    log_file = open(log_path, "w", encoding="utf-8")
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=BASE_DIR,
-            text=True,
-            env=dict(os.environ, PYTHONIOENCODING="utf-8")
-        )
-        active_tasks[task_id] = {
-            "process": proc,
-            "log_file": log_file,
-            "topic": "24시간 무인 자동화",
-            "lang": "ko"
-        }
-        return jsonify({"task_id": task_id, "status": "started"})
-    except Exception as e:
-        log_file.close()
-        return jsonify({"error": f"무인 자동화 프로세스 시작 실패: {str(e)}"}), 500
+    return jsonify({"status": "started", "task_id": task_id})
 
 @app.route('/api/optimize_seo', methods=['POST'])
 def optimize_seo():
@@ -498,22 +137,7 @@ def generate():
     is_direct = data.get("is_direct", False)
     media_type = data.get("media_type", "image")
     aspect_ratio = data.get("aspect_ratio", "9:16")
-    coupang_mode = data.get("coupang_mode", False)
     
-    gating = load_gating()
-    role = gating.get("user_role", "free")
-    if role == "free":
-        last_gen = gating.get("last_generation_time", 0.0)
-        time_passed = time.time() - last_gen
-        if time_passed < 5400:
-            remaining = int(5400 - time_passed)
-            return jsonify({"error": f"무료 요금제는 1시간 30분의 제작 대기 쿨타임이 적용됩니다. {remaining // 60}분 {remaining % 60}초 뒤에 다시 제작하세요."}), 403
-        if coupang_mode:
-            return jsonify({"error": "쿠팡 파트너스 연계 모드는 MEGA 이상의 플랜이 필요합니다."}), 403
-            
-        gating["last_generation_time"] = time.time()
-        save_gating(gating)
-
     # 추천 없이 다이렉트로 바로 제작하는 경우, 기성 훅 자동 빌드
     if is_direct and not hook:
         hook = f"{topic}, 당신이 절대 몰랐던 숨겨진 진실?"
@@ -526,7 +150,7 @@ def generate():
     
     # Command to run generate_video_v2.py
     cmd = [
-        sys.executable,
+        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
         "-u",  # Unbuffered output to write logs in real-time
         os.path.join(BASE_DIR, "generate_video_v2.py"),
         "--topic", topic,
@@ -536,8 +160,6 @@ def generate():
         "--media-type", media_type,
         "--aspect-ratio", aspect_ratio
     ]
-    if coupang_mode:
-        cmd.append("--coupang-mode")
     if pick is not None:
         cmd.extend(["--pick", str(pick)])
     if hook:
@@ -568,15 +190,11 @@ def generate():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     """Starts the TikTok automatic uploader script (main.py) in a background subprocess"""
-    gating = load_gating()
-    if gating.get("user_role") == "free":
-        return jsonify({"error": "자동 스케줄 예약 업로드 기능은 PRO 이상의 플랜에서 지원합니다. 플랜을 업그레이드하세요."}), 403
-
     task_id = str(uuid.uuid4())
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        sys.executable,
+        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
         "-u",
         os.path.join(BASE_DIR, "main.py")
     ]
@@ -610,7 +228,7 @@ def api_init_session():
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        sys.executable,
+        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
         "-u",
         os.path.join(BASE_DIR, "init_session.py")
     ]
@@ -789,24 +407,12 @@ def upload_single():
     filename = data.get("filename", "").strip()
     if not filename:
         return jsonify({"error": "업로드할 비디오 파일명을 입력해 주세요."}), 400
-
-    gating = load_gating()
-    role = gating.get("user_role", "free")
-    if role == "free":
-        today = time.strftime('%Y-%m-%d')
-        if gating.get("last_upload_date") != today:
-            gating["last_upload_date"] = today
-            gating["daily_upload_count"] = 0
-        if gating.get("daily_upload_count", 0) >= 2:
-            return jsonify({"error": "무료 요금제는 하루 최대 2개의 영상만 업로드할 수 있습니다. 플랜을 업그레이드하세요."}), 403
-        gating["daily_upload_count"] = gating.get("daily_upload_count", 0) + 1
-        save_gating(gating)
-
+        
     task_id = str(uuid.uuid4())
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        sys.executable,
+        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
         "-u",
         os.path.join(BASE_DIR, "main.py"),
         "--video", filename
@@ -840,6 +446,5 @@ def serve_video(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 if __name__ == '__main__':
-    # Run server on port from environment variable (default: 5000) for Render compatibility
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Run server on port 5000
+    app.run(host='0.0.0.0', port=5000, debug=True)

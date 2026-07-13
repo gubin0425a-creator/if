@@ -29,6 +29,20 @@ PROGRESS_KEYWORDS = {
     "나레이션 음성 생성": 62, "[Build]": 80, "최종 영상 렌더링": 90, "영상 제작 완료": 100
 }
 
+def _find_meta_path(filename: str) -> str | None:
+    base = filename.replace(".mp4", "")
+    candidates = [base]
+    for prefix in ("auto_shorts_", "auto_long_", "auto_"):
+        if base.startswith(prefix):
+            candidates.append(base[len(prefix):])
+            break
+    for d in [os.path.join(BASE_DIR, "subtitles"), os.path.join(BASE_DIR, "completed")]:
+        for cand in candidates:
+            p = os.path.join(d, f"{cand}_metadata.json")
+            if os.path.exists(p):
+                return p
+    return None
+
 class ChronosGUI:
     def __init__(self, root):
         self.root = root
@@ -120,14 +134,23 @@ class ChronosGUI:
     def _finalize_and_sync(self, old_f, title):
         try:
             safe = re.sub(r'[\\/:*?"<>|]', '', title).strip().replace(' ', '_')
-            up_dir, srt_dir = os.path.join(BASE_DIR, "videos_to_upload"), os.path.join(BASE_DIR, "subtitles")
+            if not safe: return
+            up_dir = os.path.join(BASE_DIR, "videos_to_upload")
             old_v, new_v = os.path.join(up_dir, old_f), os.path.join(up_dir, f"{safe}.mp4")
-            old_m = os.path.join(srt_dir, f"{old_f.replace('.mp4','')}_metadata.json")
-            new_m = os.path.join(srt_dir, f"{safe}_metadata.json")
+            
+            old_m = _find_meta_path(old_f)
+            if old_m:
+                meta_dir = os.path.dirname(old_m)
+            else:
+                meta_dir = os.path.join(BASE_DIR, "subtitles")
+                old_m = os.path.join(meta_dir, f"{old_f.replace('.mp4','')}_metadata.json")
+                
+            new_m = os.path.join(meta_dir, f"{safe}_metadata.json")
             if os.path.exists(old_v) and old_v != new_v: os.rename(old_v, new_v)
             if os.path.exists(old_m) and old_m != new_m: os.rename(old_m, new_m)
             self.refresh_library(); self.log(f"✅ 동기화 완료: {safe}.mp4\n")
-        except: pass
+        except Exception as e:
+            self.log(f"❌ 동기화 오류: {e}\n")
 
     def start_automation_factory(self):
         if not messagebox.askyesno("공장 가동", "30분 동안 영상 3개 제작 및 자동 업로드를 시작합니까?"): return
@@ -163,13 +186,17 @@ class ChronosGUI:
         for f in os.listdir(up_dir):
             if not f.endswith(".mp4"): continue
             fp = os.path.join(up_dir, f); st = os.stat(fp)
-            m_path = os.path.join(BASE_DIR, "subtitles", f"{f.replace('.mp4','')}_metadata.json")
+            m_path = _find_meta_path(f)
             seo, act = "90점+", "대기 중"
-            if os.path.exists(m_path):
+            if m_path:
                 try:
                     with open(m_path, "r", encoding="utf-8") as mf:
-                        m = json.load(mf); res = SEOAnalyzer.calculate_seo_score(m.get('title'), m.get('description'), m.get('tags'))
-                        seo = f"{res['seo_score']}점"; act = f"{m.get('revive_report', {}).get('algorithm_activity', 100)}%"
+                        m = json.load(mf)
+                    res = SEOAnalyzer.calculate_seo_score(m.get('title'), m.get('description'), m.get('tags'))
+                    seo = f"{res['seo_score']}점"
+                    rr = m.get('revive_report', {})
+                    act_val = rr.get('algorithm_activity', rr.get('success_rate', '대기 중'))
+                    act = f"{act_val}%" if str(act_val).isdigit() else act_val
                 except: pass
             files.append((f, seo, act, f"{st.st_size/1024/1024:.1f}", datetime.datetime.fromtimestamp(st.st_mtime).strftime("%m-%d %H:%M"), st.st_mtime))
         for f_d in sorted(files, key=lambda x: x[5], reverse=True): self.library_tree.insert("", tk.END, values=f_d[:5])
@@ -203,30 +230,72 @@ class ChronosGUI:
 
     def start_seo_optimization(self):
         sel = self.library_tree.selection()
-        if sel:
-            f = self.library_tree.item(sel[0])["values"][0]
-            def worker():
-                try:
-                    m_p = os.path.join(BASE_DIR, "subtitles", f"{f.replace('.mp4','')}_metadata.json")
-                    with open(m_p, "r", encoding="utf-8") as file: meta = json.load(f)
-                    opt = ChannelOptimizer().optimize_video_metadata(meta.get("title",""), meta.get("description",""), meta.get("tags",[]))
-                    if opt:
-                        with open(m_p, "w", encoding="utf-8") as file: json.dump(opt, file, ensure_ascii=False, indent=2)
-                        self.root.after(0, lambda: self._finalize_and_sync(f, opt['title']))
-                except: pass
-            threading.Thread(target=worker, daemon=True).start()
+        if not sel:
+            messagebox.showwarning("선택 필요", "최적화할 영상을 보관함에서 선택하세요.")
+            return
+        f = self.library_tree.item(sel[0])["values"][0]
+        def worker():
+            try:
+                m_p = _find_meta_path(f)
+                if not m_p:
+                    self.log(f"[SEO] 메타데이터 파일을 찾을 수 없습니다: {f}\n")
+                    return
+                with open(m_p, "r", encoding="utf-8") as file:
+                    meta = json.load(file)
+                self.log(f"[SEO] 최적화 진행 중: {meta.get('title', f)}\n")
+                opt = ChannelOptimizer().optimize_video_metadata(meta.get("title",""), meta.get("description",""), meta.get("tags",[]))
+                if opt:
+                    with open(m_p, "w", encoding="utf-8") as file:
+                        json.dump(opt, file, ensure_ascii=False, indent=2)
+                    self.root.after(0, lambda: self._finalize_and_sync(f, opt['title']))
+                    self.log(f"[SEO] 최적화 완료: {opt.get('title')}\n")
+                else:
+                    self.log("[SEO] 최적화 결과를 받지 못했습니다.\n")
+            except Exception as e:
+                self.log(f"[SEO] 오류: {e}\n")
+        threading.Thread(target=worker, daemon=True).start()
 
     def start_video_revive(self):
         sel = self.library_tree.selection()
-        if sel:
-            f = self.library_tree.item(sel[0])["values"][0]
-            def worker():
-                report = ChannelOptimizer().revive_stalled_video(f, {"viewCount": "1250", "recent_views": "2"}, {"avg_views": 5000})
+        if not sel:
+            messagebox.showwarning("선택 필요", "소생할 영상을 보관함에서 선택하세요.")
+            return
+        f = self.library_tree.item(sel[0])["values"][0]
+        def worker():
+            try:
+                m_p = _find_meta_path(f)
+                meta = {}
+                if m_p:
+                    with open(m_p, "r", encoding="utf-8") as file:
+                        meta = json.load(file)
+                
+                self.log(f"🚑 소생 분석 시작: {meta.get('title', f)}\n")
+                report = ChannelOptimizer().revive_stalled_video(
+                    video_id=f,
+                    stats={"viewCount": "1250", "recent_views": "2"},
+                    channel_stats={"avg_views": 5000},
+                    current_title=meta.get("title", ""),
+                    current_description=meta.get("description", "")
+                )
+                
+                if m_p and report:
+                    meta["revive_report"] = report
+                    with open(m_p, "w", encoding="utf-8") as file:
+                        json.dump(meta, file, ensure_ascii=False, indent=2)
+                
                 self.log(f"🚑 소생 성공 확률: {report.get('success_rate')}% / 활성도: {report.get('algorithm_activity')}%\n")
-            threading.Thread(target=worker, daemon=True).start()
+                self.log(f"📋 액션 플랜: {report.get('action_plan')}\n")
+                self.root.after(0, self.refresh_library)
+            except Exception as e:
+                self.log(f"🚑 소생 오류: {e}\n")
+        threading.Thread(target=worker, daemon=True).start()
 
     def stop_active_process(self):
-        if self.active_process: self.active_process.terminate(); self.active_process = None; self.set_buttons_state(tk.NORMAL)
+        if self.active_process:
+            self.active_process.terminate()
+            self.active_process = None
+            self.set_buttons_state(tk.NORMAL)
+            self.log("🛑 작업이 중지되었습니다.\n")
 
     def set_buttons_state(self, s):
         for b in [self.recommend_btn, self.direct_btn, self.factory_btn]: b.configure(state=s)
@@ -235,25 +304,83 @@ class ChronosGUI:
     def run_cmd_in_thread(self, cmd):
         def worker():
             self.root.after(0, self.set_buttons_state, tk.DISABLED)
-            self.active_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", cwd=BASE_DIR)
-            while True:
-                l = self.active_process.stdout.readline()
-                if not l and self.active_process.poll() is not None: break
-                if l: self.root.after(0, self.log, l)
-            self.root.after(0, self.set_buttons_state, tk.NORMAL); self.root.after(0, self.refresh_library)
+            try:
+                self.active_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", cwd=BASE_DIR)
+                while True:
+                    proc = self.active_process
+                    if not proc: break
+                    l = proc.stdout.readline()
+                    if not l and proc.poll() is not None: break
+                    if l: self.root.after(0, self.log, l)
+                rc = self.active_process.returncode if self.active_process else -1
+                if rc == 0:
+                    self.root.after(0, lambda: messagebox.showinfo("완료", "✅ 작업이 성공적으로 완료되었습니다!"))
+                else:
+                    self.log(f"\n[System] 프로세스 종료 코드: {rc}\n")
+            except Exception as e:
+                self.log(f"\n[System] 실행 에러: {e}\n")
+            finally:
+                self.active_process = None
+                self.root.after(0, self.set_buttons_state, tk.NORMAL)
+                self.root.after(0, self.refresh_library)
         threading.Thread(target=worker, daemon=True).start()
 
     def play_selected_video(self):
         sel = self.library_tree.selection()
         if sel: os.startfile(os.path.join(BASE_DIR, "videos_to_upload", self.library_tree.item(sel[0])["values"][0]))
     def open_video_folder(self): os.startfile(os.path.join(BASE_DIR, "videos_to_upload"))
-    def sync_all_library_filenames(self): self.refresh_library()
-    def start_upload(self): pass
+    
+    def sync_all_library_filenames(self):
+        if not messagebox.askyesno("확인", "보관함의 모든 영상 파일명을 SEO 제목으로 동기화하시겠습니까?"): return
+        count = 0
+        up_dir = os.path.join(BASE_DIR, "videos_to_upload")
+        for f in list(os.listdir(up_dir)):
+            if not f.endswith(".mp4"): continue
+            m_path = _find_meta_path(f)
+            if not m_path: continue
+            try:
+                with open(m_path, "r", encoding="utf-8") as file:
+                    meta = json.load(file)
+                title = meta.get("title", "").strip()
+                if not title: continue
+                safe = re.sub(r'[\\/:*?"<>|]', '', title).strip().replace(' ', '_')
+                if not safe: continue
+                old_v = os.path.join(up_dir, f)
+                new_v = os.path.join(up_dir, f"{safe}.mp4")
+                new_m = os.path.join(os.path.dirname(m_path), f"{safe}_metadata.json")
+                if old_v != new_v and not os.path.exists(new_v):
+                    os.rename(old_v, new_v)
+                    if m_path != new_m and not os.path.exists(new_m):
+                        os.rename(m_path, new_m)
+                    self.log(f"[Sync] {f} -> {safe}.mp4\n")
+                    count += 1
+            except Exception as e:
+                self.log(f"[Sync] 오류 ({f}): {e}\n")
+        self.refresh_library()
+        messagebox.showinfo("완료", f"{count}개 파일의 파일명 동기화 완료")
+
+    def start_upload(self):
+        if self.active_process:
+            messagebox.showerror("오류", "작업이 진행 중입니다. 완료 후 다시 시도하세요.")
+            return
+        sel = self.library_tree.selection()
+        if not sel:
+            messagebox.showwarning("선택 필요", "업로드할 영상을 보관함에서 선택하세요.")
+            return
+        f = self.library_tree.item(sel[0])["values"][0]
+        if not messagebox.askyesno("업로드 확인", f"'{f}'를 유튜브에 업로드하시겠습니까?"): return
+        cmd = [os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"), "-u", "main.py", "--video", f]
+        self.log(f"\n[Upload] 📲 '{f}' 업로드 시작...\n")
+        self.run_cmd_in_thread(cmd)
+
     def _load_last_topic(self):
         try:
             with open(os.path.join(BASE_DIR, "last_topic.txt"), "r", encoding="utf-8") as f: return f.read().strip()
         except: return ""
     def start_market_analysis(self): pass
 
+
 if __name__ == "__main__":
-    root = tk.Tk(); app = ChronosGUI(root); root.mainloop()
+    root = tk.Tk()
+    app = ChronosGUI(root)
+    root.mainloop()

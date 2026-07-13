@@ -70,38 +70,9 @@ class YouTubeUploader:
         print("[YouTube] ✅ 유튜브 API 연동 완료!")
         return True
 
-    def get_next_optimal_publish_time(self):
-        """
-        Calculates the next optimal publish time based on KST (UTC+9) target audience peak hours
-        shifted 20 minutes earlier to allow indexing (11:40, 17:40, 20:40, 22:40 KST).
-        """
-        import datetime
-        # KST time zone (UTC+9)
-        kst_tz = datetime.timezone(datetime.timedelta(hours=9))
-        now = datetime.datetime.now(kst_tz)
-        
-        # Candidate times for today (20 minutes before peak hours)
-        candidates = [
-            now.replace(hour=11, minute=40, second=0, microsecond=0),
-            now.replace(hour=17, minute=40, second=0, microsecond=0),
-            now.replace(hour=20, minute=40, second=0, microsecond=0),
-            now.replace(hour=22, minute=40, second=0, microsecond=0)
-        ]
-        
-        # Find the first candidate that is in the future
-        for candidate in candidates:
-            if candidate > now:
-                return candidate.isoformat()
-        
-        # If all candidates for today have passed, return 11:40 tomorrow
-        tomorrow = now + datetime.timedelta(days=1)
-        next_day_candidate = tomorrow.replace(hour=11, minute=40, second=0, microsecond=0)
-        return next_day_candidate.isoformat()
-
-    def upload_shorts(self, video_path, title, description, tags=None, privacy_status="public", publish_at=None):
+    def upload_shorts(self, video_path, title, description, tags=None, privacy_status="public"):
         """
         Uploads a video to YouTube with Shorts optimization.
-        If publish_at (ISO 8601 string) is provided, schedules the upload and sets privacy to private.
         """
         if not self.youtube_client:
             self.authenticate()
@@ -111,9 +82,6 @@ class YouTubeUploader:
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
         print(f"[YouTube] 업로드 시작: {os.path.basename(video_path)}")
-        if publish_at:
-            print(f"[YouTube] ⏰ 업로드 예약 설정됨: {publish_at} (KST)")
-            privacy_status = "private"
         
         # Shorts 최적화를 위해 제목과 본문에 #Shorts 키워드 추가 강제
         if "#Shorts" not in title and "#shorts" not in title:
@@ -125,13 +93,6 @@ class YouTubeUploader:
         if tags is None:
             tags = ["Shorts", "AlternativeHistory", "WhatIf", "Documentary"]
 
-        status_body = {
-            'privacyStatus': privacy_status,
-            'selfDeclaredMadeForKids': False
-        }
-        if publish_at:
-            status_body['publishAt'] = publish_at
-
         body = {
             'snippet': {
                 'title': title,
@@ -139,7 +100,10 @@ class YouTubeUploader:
                 'tags': tags,
                 'categoryId': '27'  # 27 = Education
             },
-            'status': status_body
+            'status': {
+                'privacyStatus': privacy_status,
+                'selfDeclaredMadeForKids': False
+            }
         }
 
         # Chunked upload configuration
