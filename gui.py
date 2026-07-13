@@ -15,6 +15,7 @@ import subprocess
 import json
 import datetime
 import re
+from PIL import Image, ImageTk
 from src.market_analyzer import MarketAnalyzer
 from src.channel_optimizer import ChannelOptimizer
 from src.knowledge_engine import KnowledgeEngine
@@ -123,6 +124,9 @@ class ChronosGUI:
 
         lib_f = tk.LabelFrame(right, text="🎬 알고리즘 대기실 (Library)", bg="#1e1e2e", fg="#fab387", font=("Malgun Gothic", 10, "bold"), pady=5); lib_f.pack(fill=tk.BOTH, expand=True)
         self.library_tree = ttk.Treeview(lib_f, columns=("name", "seo", "activity", "size", "time"), show="headings", height=6, style="Chronos.Treeview"); self.library_tree.pack(fill=tk.BOTH, expand=True, padx=5)
+        self.library_tree.tag_configure("blue_text", foreground="#89b4fa")
+        self.library_tree.bind("<<TreeviewSelect>>", self.on_library_select)
+        
         for c, w in zip(["name", "seo", "activity", "size", "time"], [350, 70, 90, 70, 140]):
             self.library_tree.heading(c, text=c.upper()); self.library_tree.column(c, width=w, anchor=tk.CENTER)
 
@@ -133,6 +137,7 @@ class ChronosGUI:
         self.progress_var = tk.DoubleVar(value=0); self.progressbar = ttk.Progressbar(right, variable=self.progress_var, maximum=100, mode="determinate", style="Chronos.Horizontal.TProgressbar"); self.progressbar.pack(fill=tk.X, pady=5)
         self.progress_label = tk.Label(right, text="시스템 대기 중", bg="#1e1e2e", fg="#89dceb", font=("Malgun Gothic", 9, "bold")); self.progress_label.pack()
         self.refresh_library()
+        self.update_live_preview()
 
     def _btn(self, p, t, c, cmd):
         b = tk.Button(p, text=t, bg=c, fg="#1e1e2e", font=("Malgun Gothic", 10, "bold"), command=cmd, bd=0); b.pack(fill=tk.X, pady=4); return b
@@ -210,7 +215,8 @@ class ChronosGUI:
                     act = f"{act_val}%" if str(act_val).isdigit() else act_val
                 except: pass
             files.append((f, seo, act, f"{st.st_size/1024/1024:.1f}", datetime.datetime.fromtimestamp(st.st_mtime).strftime("%m-%d %H:%M"), st.st_mtime))
-        for f_d in sorted(files, key=lambda x: x[5], reverse=True): self.library_tree.insert("", tk.END, values=f_d[:5])
+        for f_d in sorted(files, key=lambda x: x[5], reverse=True):
+            self.library_tree.insert("", tk.END, values=f_d[:5], tags=("blue_text",))
 
     def start_recommend(self):
         t = self.topic_entry.get().strip()
@@ -389,6 +395,103 @@ class ChronosGUI:
             with open(os.path.join(BASE_DIR, "last_topic.txt"), "r", encoding="utf-8") as f: return f.read().strip()
         except: return ""
     def start_market_analysis(self): pass
+
+    def update_live_preview(self):
+        """temp/ 디렉토리를 주기적으로 확인하여 AI 생성 중인 실시간 이미지를 미리보기 라벨에 로드"""
+        try:
+            if not os.path.exists(TEMP_DIR):
+                self.root.after(1000, self.update_live_preview)
+                return
+            
+            # temp/ 내의 이미지 파일들 검색
+            candidates = []
+            for f in os.listdir(TEMP_DIR):
+                if f.endswith((".jpg", ".jpeg", ".png")) and ("scene_media" in f or "scene_ref" in f):
+                    fp = os.path.join(TEMP_DIR, f)
+                    candidates.append((fp, os.path.getmtime(fp)))
+            
+            if candidates:
+                # 가장 최근에 생성/수정된 이미지 선택
+                latest_image = max(candidates, key=lambda x: x[1])[0]
+                # 파일 크기가 완전히 써질 때까지 기다리는 최소 안전망 (100바이트 이상)
+                if os.path.exists(latest_image) and os.path.getsize(latest_image) > 100:
+                    img = Image.open(latest_image)
+                    # 미리보기 프레임 크기에 맞춰 리사이즈 (280x280)
+                    img.thumbnail((280, 280), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(img)
+                    self.preview_label.config(image=photo, text="")
+                    self._preview_photo = photo # GC 방지용 레퍼런스 유지
+        except Exception:
+            pass
+        self.root.after(1000, self.update_live_preview)
+
+    def on_library_select(self, event):
+        """보관함의 영상을 선택했을 때 오른쪽에 메타데이터 리포트 및 첫 장면 썸네일 미리보기 표시"""
+        sel = self.library_tree.selection()
+        if not sel: return
+        f_name = self.library_tree.item(sel[0])["values"][0]
+        
+        try:
+            m_path = _find_meta_path(f_name)
+            if not m_path:
+                self.log_text.delete("1.0", tk.END)
+                self.log_text.insert(tk.END, f"📌 [선택된 영상] {f_name}\n\n⚠️ 메타데이터 파일을 찾을 수 없습니다.")
+                return
+            
+            with open(m_path, "r", encoding="utf-8") as file:
+                meta = json.load(file)
+            
+            # 1. 오른쪽 로그 창에 비디오 메타데이터 상세 정보 표시
+            self.log_text.delete("1.0", tk.END)
+            self.log_text.insert(tk.END, "="*50 + "\n")
+            self.log_text.insert(tk.END, f"🎬 [동영상 상세 정보] {f_name}\n")
+            self.log_text.insert(tk.END, "="*50 + "\n\n")
+            self.log_text.insert(tk.END, f"🏷️ [최적화 제목]\n    {meta.get('title', '없음')}\n\n")
+            self.log_text.insert(tk.END, f"🎯 [알고리즘 훅]\n    {meta.get('hook', '없음')}\n\n")
+            self.log_text.insert(tk.END, f"📊 [SEO 최적화 점수]: {meta.get('seo_score', 0)}점 (100점 만점)\n\n")
+            
+            triple_k = meta.get("triple_keywords", [])
+            self.log_text.insert(tk.END, f"🔑 [트리플 키워드 매칭]: {', '.join(triple_k) if triple_k else '없음'}\n\n")
+            self.log_text.insert(tk.END, f"📜 [동영상 태그 목록]\n    {', '.join(meta.get('tags', []))}\n\n")
+            self.log_text.insert(tk.END, f"📝 [유튜브 설명란 본문]\n{meta.get('description', '')}\n\n")
+            
+            rev_report = meta.get("revive_report", {})
+            if rev_report:
+                self.log_text.insert(tk.END, "="*50 + "\n")
+                self.log_text.insert(tk.END, f"🚑 [알고리즘 심폐소생술 리포트]\n")
+                self.log_text.insert(tk.END, "="*50 + "\n")
+                self.log_text.insert(tk.END, f"  - 소생 성공 확률: {rev_report.get('success_rate', 100)}%\n")
+                self.log_text.insert(tk.END, f"  - 알고리즘 활성도: {rev_report.get('algorithm_activity', 100)}%\n")
+                self.log_text.insert(tk.END, f"  - 예상 유입량 (48h): {rev_report.get('expected_views_48h', 0):,}회\n")
+                self.log_text.insert(tk.END, f"  - 액션 플랜:\n    {rev_report.get('action_plan', '')}\n\n")
+
+            # 2. 미리보기 창에 해당 비디오의 프레임 또는 메타데이터 기반 썸네일 탐색 후 로드
+            # subtitles 폴더 등에 저장되었던 첫 장면 이미지(scene_media_0.jpg 등)나 reference 파일 로드
+            thumbnail_found = False
+            base_name = f_name.replace(".mp4", "")
+            
+            # subtitles 폴더 혹은 completed 폴더 내의 이미지 탐색
+            search_dirs = [os.path.join(BASE_DIR, "subtitles"), os.path.join(BASE_DIR, "completed"), TEMP_DIR]
+            for sd in search_dirs:
+                if thumbnail_found: break
+                for ext in [".jpg", ".png", ".jpeg"]:
+                    test_p = os.path.join(sd, f"{base_name}{ext}")
+                    if os.path.exists(test_p) and os.path.getsize(test_p) > 100:
+                        img = Image.open(test_p)
+                        img.thumbnail((280, 280), Image.Resampling.LANCZOS)
+                        photo = ImageTk.PhotoImage(img)
+                        self.preview_label.config(image=photo, text="")
+                        self._preview_photo = photo
+                        thumbnail_found = True
+                        break
+            
+            if not thumbnail_found:
+                # 썸네일 이미지가 직접 없으면 빈 박스에 파일 정보 텍스트 표시
+                self.preview_label.config(image="", text=f"대표 이미지\n(No Thumbnail)\n\n{f_name}", fg="#89b4fa", font=("Malgun Gothic", 10, "bold"))
+                
+        except Exception as e:
+            self.log_text.insert(tk.END, f"\n⚠️ 정보 로드 에러: {e}")
+
 
 
 if __name__ == "__main__":
