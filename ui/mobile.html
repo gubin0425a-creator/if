@@ -637,6 +637,7 @@
         <p>서버 터미널에 표시된 <b>50자 마스터 코드</b> 또는<br>설정한 <b>사용자 암호</b>를 입력해 주십시오.</p>
         <input type="password" id="access_code" placeholder="마스터 코드 입력">
         <button onclick="unlock()">인증 완료 및 대시보드 진입</button>
+        <button onclick="requestWifiCode()" style="background: linear-gradient(45deg, #2ec4b6, #0cb0a0); margin-top: 8px; font-weight: 700;">📲 동일 와이파이 원클릭 간편인증</button>
         <p id="auth_msg" style="color: var(--primary); margin-top: 15px; font-weight: 600;"></p>
     </div>
 
@@ -1167,6 +1168,11 @@
                     </p>
                     
                     <div class="input-group">
+                        <label for="backend-server-host">백엔드 서버 주소 (URL)</label>
+                        <input type="text" id="backend-server-host" placeholder="예: http://localhost:5000 또는 https://your-server.onrender.com">
+                    </div>
+
+                    <div class="input-group">
                         <label for="gemini-api-key">Google Gemini API Key (은폐됨)</label>
                         <input type="password" id="gemini-api-key" placeholder="••••••••••••••••••••••••••••••••" value="AIzaSyDummyKeyForSecurityHidden123">
                     </div>
@@ -1246,7 +1252,14 @@
     </div>
 
     <script>
-        const host = window.location.origin;
+        let host = localStorage.getItem('backend_host');
+        if (!host) {
+            if (window.location.hostname.includes("github.io")) {
+                host = "http://localhost:5000";
+            } else {
+                host = window.location.origin;
+            }
+        }
 
         // UI 요소들
         const baseTopicInput = document.getElementById('base-topic');
@@ -1603,11 +1616,53 @@
 
         // API 설정 저장
         async function saveSettingsAPI() {
-            alert("입력하신 기기 크레덴셜 정보가 안전하게 서버 데이터베이스에 동기화 및 은폐 저장되었습니다.");
+            const newHost = document.getElementById('backend-server-host').value.trim();
+            if (newHost) {
+                const formattedHost = newHost.endsWith('/') ? newHost.slice(0, -1) : newHost;
+                localStorage.setItem('backend_host', formattedHost);
+            } else {
+                localStorage.removeItem('backend_host');
+            }
+            alert("입력하신 기기 크레덴셜 정보 및 백엔드 주소가 안전하게 동기화 저장되었습니다. 새로고침을 진행합니다.");
+            window.location.reload();
+        }
+
+        async function requestWifiCode() {
+            let deviceId = localStorage.getItem('device_id');
+            if (!deviceId) {
+                deviceId = 'dev_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('device_id', deviceId);
+            }
+
+            document.getElementById('auth_msg').innerText = "⏳ 동일 와이파이 간편인증 요청 중...";
+            try {
+                const res = await fetch(`${host}/api/issue_code`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                const data = await res.json();
+                if (res.ok && data.code) {
+                    document.getElementById('access_code').value = data.code;
+                    document.getElementById('auth_msg').innerText = "✅ 와이파이 자동인증 성공! 대시보드로 진입합니다.";
+                    setTimeout(() => {
+                        unlock();
+                    }, 1000);
+                } else {
+                    document.getElementById('auth_msg').innerText = `❌ 인증 실패: ${data.error || '오류가 발생했습니다.'}`;
+                }
+            } catch (e) {
+                document.getElementById('auth_msg').innerText = "❌ 서버와 연결할 수 없습니다. 백엔드 주소나 네트워크를 확인해 주세요.";
+            }
         }
 
         // 초기 기동
         window.addEventListener('DOMContentLoaded', async () => {
+            const backendHostInput = document.getElementById('backend-server-host');
+            if (backendHostInput) {
+                backendHostInput.value = localStorage.getItem('backend_host') || "";
+            }
+
             const savedCode = localStorage.getItem('master_code');
             if (savedCode) {
                 await checkAutoLogin(savedCode);

@@ -22,13 +22,102 @@ CORS(app)
 # 초기 코드 생성 및 출력
 SecurityManager.get_current_code()
 
+# 동일 와이파이 자동인증 제한 데이터 관리
+ISSUED_CODES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "issued_codes.json")
+
+def load_issued_codes():
+    if os.path.exists(ISSUED_CODES_FILE):
+        try:
+            with open(ISSUED_CODES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_issued_codes(data):
+    try:
+        os.makedirs(os.path.dirname(ISSUED_CODES_FILE), exist_ok=True)
+        with open(ISSUED_CODES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("Error saving issued codes:", e)
+
+# 서버 공인 IP 캐싱
+_server_public_ip = ""
+def get_server_public_ip():
+    global _server_public_ip
+    if not _server_public_ip:
+        try:
+            import urllib.request
+            _server_public_ip = urllib.request.urlopen('https://api.ipify.org', timeout=3).read().decode('utf8').strip()
+        except:
+            pass
+    return _server_public_ip
+
 @app.route('/api/verify_code', methods=['POST'])
 def verify_code():
     data = request.json or {}
     code = data.get("code", "")
     if SecurityManager.verify_code(code):
+        # PC에서 검증 성공 시 PC의 외부/로컬 IP를 active_pc_ip로 등록
+        client_ip = request.remote_addr
+        if request.headers.getlist("X-Forwarded-For"):
+            client_ip = request.headers.getlist("X-Forwarded-For")[0]
+            
+        gating = load_gating()
+        gating["active_pc_ip"] = client_ip
+        save_gating(gating)
         return jsonify({"status": "success", "message": "마스터 코드가 인증되었습니다."})
     return jsonify({"status": "error", "message": "잘못된 코드입니다."}), 403
+
+@app.route('/api/issue_code', methods=['POST'])
+def issue_code():
+    """같은 와이파이(로컬 혹은 같은 외부 IP) 조건 하에 하루 1회 1기기에 마스터 코드 발급"""
+    data = request.json or {}
+    device_id = data.get("device_id", "").strip()
+    if not device_id:
+        return jsonify({"error": "기기 식별자(device_id)가 누락되었습니다."}), 400
+
+    client_ip = request.remote_addr
+    if request.headers.getlist("X-Forwarded-For"):
+        client_ip = request.headers.getlist("X-Forwarded-For")[0]
+
+    # 1. 와이파이(네트워크) 대조
+    # 로컬 IP 접두사
+    private_prefixes = ("127.", "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "localhost", "::1")
+    
+    gating = load_gating()
+    active_pc_ip = gating.get("active_pc_ip", "")
+    server_pub = get_server_public_ip()
+    
+    is_wifi_matched = False
+    
+    # 로컬 네트워크 접속인 경우 통과
+    if any(client_ip.startswith(prefix) for prefix in private_prefixes):
+        is_wifi_matched = True
+    # 또는 클라우드 상에서 검사: 클라이언트 공인 IP가 PC 공인 IP와 같거나 서버 공인 IP와 같은 경우
+    elif active_pc_ip and client_ip == active_pc_ip:
+        is_wifi_matched = True
+    elif server_pub and client_ip == server_pub:
+        is_wifi_matched = True
+
+    if not is_wifi_matched:
+        return jsonify({"error": "동일한 와이파이(같은 IP 네트워크) 환경에 접속되어 있어야 코드를 발급받을 수 있습니다."}), 403
+
+    # 2. 기기당 일일 1회 제한 검사
+    today = time.strftime('%Y-%m-%d')
+    issued = load_issued_codes()
+    
+    last_issue_date = issued.get(device_id)
+    if last_issue_date == today:
+        return jsonify({"error": "본 기기는 오늘 이미 인증코드를 발급받았습니다. (1일 1회만 발급 가능)"}), 403
+
+    # 발급 기록 및 현재 마스터 코드 반환
+    issued[device_id] = today
+    save_issued_codes(issued)
+    
+    code = SecurityManager.get_current_code()
+    return jsonify({"code": code})
 
 # 요금제 제한(Gating) 데이터 관리
 GATING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "user_gating.json")
