@@ -74,6 +74,7 @@ class ChronosGUI:
         self.style.configure("Chronos.Horizontal.TProgressbar", troughcolor="#313244", background="#a6e3a1")
 
         self.coupang_mode = tk.BooleanVar(value=False)
+        self.long_form = tk.BooleanVar(value=False)
         self.duration_var = tk.IntVar(value=3)
         self.setup_ui()
 
@@ -95,9 +96,13 @@ class ChronosGUI:
         self.lang_combo = ttk.Combobox(g1, textvariable=self.lang_var, values=["한국어 (ko)", "영어 (en)"], state="readonly")
         self.lang_combo.pack(fill=tk.X, pady=5)
 
-        tk.Label(g1, text="⏱️ 장면 시간 (초)", bg="#181825", fg="#a6adc8").pack(anchor=tk.W)
-        self.duration_spin = tk.Spinbox(g1, from_=1, to=30, textvariable=self.duration_var, bg="#313244", fg="#ffffff", buttonbackground="#313244", bd=0, font=("Malgun Gothic", 10))
-        self.duration_spin.pack(fill=tk.X, pady=5)
+        self.duration_label = tk.Label(g1, text="⏱️ 장면 시간: 3초 (최적화)", bg="#181825", fg="#a6adc8")
+        self.duration_label.pack(anchor=tk.W, pady=(5, 0))
+        self.duration_scale = tk.Scale(g1, from_=1, to=15, orient=tk.HORIZONTAL, variable=self.duration_var, bg="#181825", fg="#ffffff", troughcolor="#313244", activebackground="#89b4fa", highlightthickness=0, bd=0, showvalue=False, command=self._update_scale_label)
+        self.duration_scale.pack(fill=tk.X, pady=5)
+
+        self.long_form_chk = tk.Checkbutton(g1, text="🎥 롱폼 비디오 모드 (16:9)", variable=self.long_form, bg="#181825", fg="#fab387", selectcolor="#313244", activebackground="#181825", activeforeground="#fab387", font=("Malgun Gothic", 9, "bold"), command=self.on_long_form_changed)
+        self.long_form_chk.pack(anchor=tk.W, pady=5)
 
         self.coupang_chk = tk.Checkbutton(g1, text="🛒 쿠팡 바이럴 모드", variable=self.coupang_mode, bg="#181825", fg="#a6e3a1", selectcolor="#313244", activebackground="#181825", activeforeground="#a6e3a1", font=("Malgun Gothic", 9, "bold"))
         self.coupang_chk.pack(anchor=tk.W, pady=5)
@@ -178,6 +183,8 @@ class ChronosGUI:
                     topics = recommend_topics(channel_performance={"avg_seo": 98, "avg_views": 50000})
                     picked = topics[0]; title, hook = picked['title'], picked['hook']
                     cmd = [os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"), "-u", "generate_video_v2.py", "--topic", title, "--hook", hook, "--duration", str(self.duration_var.get())]
+                    if self.long_form.get():
+                        cmd.extend(["--long-form", "--aspect-ratio", "16:9"])
                     if self.coupang_mode.get(): cmd.append("--coupang-mode")
                     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", cwd=BASE_DIR)
                     while True:
@@ -238,6 +245,8 @@ class ChronosGUI:
     def _start_gen(self, title, hook):
         if not messagebox.askyesno("확인", f"'{title}' 제작 시작?"): return
         cmd = [os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"), "-u", "generate_video_v2.py", "--topic", title, "--hook", hook, "--duration", str(self.duration_var.get())]
+        if self.long_form.get():
+            cmd.extend(["--long-form", "--aspect-ratio", "16:9"])
         if self.coupang_mode.get(): cmd.append("--coupang-mode")
         self.run_cmd_in_thread(cmd)
 
@@ -491,6 +500,27 @@ class ChronosGUI:
                 
         except Exception as e:
             self.log_text.insert(tk.END, f"\n⚠️ 정보 로드 에러: {e}")
+
+    def _update_scale_label(self, val):
+        """슬라이더 조작 시 ⏱️ 장면 시간 라벨에 현재 초 정보를 표시하며 최적값을 가이드"""
+        v = int(float(val))
+        guide = ""
+        if self.long_form.get():
+            if v == 5: guide = " (롱폼 최적)"
+        else:
+            if v == 3: guide = " (숏폼 최적)"
+        self.duration_label.config(text=f"⏱️ 장면 시간: {v}초{guide}")
+
+    def on_long_form_changed(self):
+        """롱폼 모드 체크 여부에 따라 최적화된 기본 재생 시간초를 자동으로 자동 지정"""
+        if self.long_form.get():
+            self.duration_var.set(5)
+            self._update_scale_label(5)
+            self.log("💡 🎥 롱폼 비디오 모드 감지: 최적의 장면 변경 지속 시간(5초)이 기본 지정되었습니다.\n")
+        else:
+            self.duration_var.set(3)
+            self._update_scale_label(3)
+            self.log("💡 📱 숏폼 비디오 모드 감지: 최적의 장면 변경 지속 시간(3초)이 기본 지정되었습니다.\n")
 
 
 
