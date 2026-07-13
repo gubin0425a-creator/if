@@ -7,7 +7,13 @@ def merge():
     mobile_path = os.path.join(base_dir, "..", "ui", "mobile.html")
     
     shutil.copyfile(index_path, mobile_path)
-    print("Successfully synchronized ui/mobile.html with ui/index.html (100% identical)!")
+    
+    root_index_path = os.path.join(base_dir, "..", "index.html")
+    root_mobile_path = os.path.join(base_dir, "..", "mobile.html")
+    shutil.copyfile(index_path, root_index_path)
+    shutil.copyfile(mobile_path, root_mobile_path)
+    
+    print("Successfully synchronized all PC and Mobile templates to ui/ and project root!")
 
 if __name__ == "__main__":
     merge()

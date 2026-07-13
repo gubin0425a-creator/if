@@ -30,6 +30,69 @@ def verify_code():
         return jsonify({"status": "success", "message": "마스터 코드가 인증되었습니다."})
     return jsonify({"status": "error", "message": "잘못된 코드입니다."}), 403
 
+# 요금제 제한(Gating) 데이터 관리
+GATING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "user_gating.json")
+
+def load_gating():
+    if os.path.exists(GATING_FILE):
+        try:
+            with open(GATING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "user_role": "free",  # free, pro, mega, mega_hyper, infinity_hyper
+        "last_generation_time": 0.0,
+        "daily_upload_count": 0,
+        "last_upload_date": time.strftime('%Y-%m-%d')
+    }
+
+def save_gating(data):
+    os.makedirs(os.path.dirname(GATING_FILE), exist_ok=True)
+    with open(GATING_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+@app.route('/api/subscription', methods=['GET', 'POST'])
+def manage_subscription():
+    gating = load_gating()
+    # 날짜 갱신 시 업로드 한도 초기화
+    today = time.strftime('%Y-%m-%d')
+    if gating.get("last_upload_date") != today:
+        gating["last_upload_date"] = today
+        gating["daily_upload_count"] = 0
+        save_gating(gating)
+
+    if request.method == 'POST':
+        data = request.json or {}
+        role = data.get("role", "free")
+        if role in ["free", "pro", "mega", "mega_hyper", "infinity_hyper"]:
+            gating["user_role"] = role
+            save_gating(gating)
+            return jsonify({"status": "success", "role": role})
+        return jsonify({"error": "잘못된 요금제 등급입니다."}), 400
+        
+    return jsonify({
+        "role": gating.get("user_role", "free"),
+        "last_generation_time": gating.get("last_generation_time", 0.0),
+        "daily_upload_count": gating.get("daily_upload_count", 0),
+        "cooldown_remaining": max(0, int(5400 - (time.time() - gating.get("last_generation_time", 0.0))))
+    })
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    v_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+    if os.path.exists(v_path):
+        try:
+            with open(v_path, "r", encoding="utf-8") as f:
+                return jsonify(json.load(f))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "version": "4.0.4",
+        "release_date": "2026-07-13",
+        "changelog": ["이전 버전 동기화 릴리즈"]
+    })
+
 @app.route('/mobile')
 def mobile_index():
     """안드로이드/모바일 전용 최적화 UI"""
@@ -46,6 +109,10 @@ def start_factory():
     code = data.get("code", "")
     if not SecurityManager.verify_code(code):
         return jsonify({"error": "보안 인증이 필요합니다."}), 403
+
+    gating = load_gating()
+    if gating.get("user_role") == "free":
+        return jsonify({"error": "풀-오토 공장 모드는 FREE 플랜에서 사용할 수 없습니다. 플랜을 업그레이드하세요."}), 403
 
     coupang_mode = data.get("coupang_mode", False)
     task_id = str(uuid.uuid4())
@@ -88,6 +155,10 @@ def start_scheduler():
     code = data.get("code", "")
     if not SecurityManager.verify_code(code):
         return jsonify({"error": "보안 인증이 필요합니다."}), 403
+
+    gating = load_gating()
+    if gating.get("user_role") == "free":
+        return jsonify({"error": "24시간 자동 업로드 엔진은 FREE 플랜에서 사용할 수 없습니다. 플랜을 업그레이드하세요."}), 403
 
     coupang_mode = data.get("coupang_mode", False)
     task_id = str(uuid.uuid4())
@@ -198,6 +269,20 @@ def generate():
     aspect_ratio = data.get("aspect_ratio", "9:16")
     coupang_mode = data.get("coupang_mode", False)
     
+    gating = load_gating()
+    role = gating.get("user_role", "free")
+    if role == "free":
+        last_gen = gating.get("last_generation_time", 0.0)
+        time_passed = time.time() - last_gen
+        if time_passed < 5400:
+            remaining = int(5400 - time_passed)
+            return jsonify({"error": f"무료 요금제는 1시간 30분의 제작 대기 쿨타임이 적용됩니다. {remaining // 60}분 {remaining % 60}초 뒤에 다시 제작하세요."}), 403
+        if coupang_mode:
+            return jsonify({"error": "쿠팡 파트너스 연계 모드는 MEGA 이상의 플랜이 필요합니다."}), 403
+            
+        gating["last_generation_time"] = time.time()
+        save_gating(gating)
+
     # 추천 없이 다이렉트로 바로 제작하는 경우, 기성 훅 자동 빌드
     if is_direct and not hook:
         hook = f"{topic}, 당신이 절대 몰랐던 숨겨진 진실?"
@@ -252,6 +337,10 @@ def generate():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     """Starts the TikTok automatic uploader script (main.py) in a background subprocess"""
+    gating = load_gating()
+    if gating.get("user_role") == "free":
+        return jsonify({"error": "자동 스케줄 예약 업로드 기능은 PRO 이상의 플랜에서 지원합니다. 플랜을 업그레이드하세요."}), 403
+
     task_id = str(uuid.uuid4())
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
@@ -469,7 +558,19 @@ def upload_single():
     filename = data.get("filename", "").strip()
     if not filename:
         return jsonify({"error": "업로드할 비디오 파일명을 입력해 주세요."}), 400
-        
+
+    gating = load_gating()
+    role = gating.get("user_role", "free")
+    if role == "free":
+        today = time.strftime('%Y-%m-%d')
+        if gating.get("last_upload_date") != today:
+            gating["last_upload_date"] = today
+            gating["daily_upload_count"] = 0
+        if gating.get("daily_upload_count", 0) >= 2:
+            return jsonify({"error": "무료 요금제는 하루 최대 2개의 영상만 업로드할 수 있습니다. 플랜을 업그레이드하세요."}), 403
+        gating["daily_upload_count"] = gating.get("daily_upload_count", 0) + 1
+        save_gating(gating)
+
     task_id = str(uuid.uuid4())
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     

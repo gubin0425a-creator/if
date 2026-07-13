@@ -1,0 +1,21 @@
+{
+  "short_name": "Chronos AI",
+  "name": "Chronos AI Shorts Creator",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./mobile.html",
+  "background_color": "#ffffff",
+  "theme_color": "#FF0000",
+  "display": "standalone",
+  "orientation": "portrait"
+}
