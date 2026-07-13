@@ -206,7 +206,7 @@ fun ChronosAppContent(
                                 result: JsResult?
                             ): Boolean {
                                 AlertDialog.Builder(context)
-                                    .setTitle("Chronos AI")
+                                    .setTitle("chip찮이즘")
                                     .setMessage(message)
                                     .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm() }
                                     .setCancelable(false)
@@ -222,7 +222,7 @@ fun ChronosAppContent(
                                 result: JsResult?
                             ): Boolean {
                                 AlertDialog.Builder(context)
-                                    .setTitle("Chronos AI")
+                                    .setTitle("chip찮이즘")
                                     .setMessage(message)
                                     .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm() }
                                     .setNegativeButton(android.R.string.cancel) { _, _ -> result?.cancel() }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chronos - AI 역사 숏폼 자동화 대시보드</title>
+    <title>chip찮이즘 - 유튜브 100% 자동화 툴</title>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
@@ -603,7 +603,7 @@
     <div id="update-loader-overlay">
         <div class="update-box">
             <h2 style="font-size: 22px; font-weight: 800; color: var(--primary); text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                🔄 Chronos AI 업데이트 중...
+                🔄 chip찮이즘 업데이트 중...
             </h2>
             <p id="update-status-text" style="font-size: 13px; text-align: center; color: var(--text-muted);">
                 최신 리소스를 다운로드하고 있습니다... (v4.0.4 ➡️ v4.1.0)
@@ -632,16 +632,17 @@
     </div>
 
     <!-- 2. 보안인증 오버레이 -->
-    <div id="gatekeeper">
-        <h1>🔐 Chronos AI 보안 인증</h1>
-        <p>서버 터미널에 표시된 <b>50자 마스터 코드</b> 또는<br>설정한 <b>사용자 암호</b>를 입력해 주십시오.</p>
-        <input type="password" id="access_code" placeholder="마스터 코드 입력">
-        <button onclick="unlock()">인증 완료 및 대시보드 진입</button>
-        <button onclick="requestWifiCode()" style="background: linear-gradient(45deg, #2ec4b6, #0cb0a0); margin-top: 8px; font-weight: 700;">📲 동일 와이파이 원클릭 간편인증</button>
-        <button onclick="discoverNearbyDevices()" style="background: linear-gradient(45deg, #FF6B6B, #FF8E53); margin-top: 8px; font-weight: 700;">📡 근처 PC 기기 탐색 (5m 이내)</button>
-        <button onclick="skipAuth()" style="background: transparent; color: var(--accent); border: 1px solid var(--border-color); margin-top: 8px; font-weight: 700;">⏩ 인증 스킵하고 진입 (컴퓨터 없음)</button>
+    <div id="gatekeeper" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; max-width: 420px; margin: 40px auto; padding: 30px; border-radius: 20px; background: var(--bg-card); box-shadow: var(--shadow);">
+        <img src="logo.png" alt="chip찮이즘 로고" style="height: 90px; width: 90px; border-radius: 18px; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 5px;">
+        <h1 style="font-size: 24px; font-weight: 800; color: var(--accent); margin-bottom: 2px;">🔐 chip찮이즘 보안 인증</h1>
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">서버 터미널에 표시된 <b>50자 마스터 코드</b> 또는<br>설정한 <b>사용자 암호</b>를 입력해 주십시오.</p>
+        <input type="password" id="access_code" placeholder="마스터 코드 입력" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 10px; font-size: 14px;">
+        <button onclick="unlock()" style="width: 100%; padding: 12px; border-radius: 10px; font-weight: 700; background: var(--primary); color: white; border: none; cursor: pointer; transition: background 0.2s;">인증 완료 및 대시보드 진입</button>
+        <button onclick="requestWifiCode()" style="width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(45deg, #2ec4b6, #0cb0a0); color: white; border: none; margin-top: 8px; font-weight: 700; cursor: pointer;">📲 동일 와이파이 원클릭 간편인증</button>
+        <button onclick="discoverNearbyDevices()" style="width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(45deg, #FF6B6B, #FF8E53); color: white; border: none; margin-top: 8px; font-weight: 700; cursor: pointer;">📡 근처 PC 기기 탐색 (5m 이내)</button>
+        <button onclick="skipAuth()" style="width: 100%; padding: 12px; border-radius: 10px; background: transparent; color: var(--accent); border: 1px solid var(--border-color); margin-top: 8px; font-weight: 700; cursor: pointer;">⏩ 인증 스킵하고 진입 (컴퓨터 없음)</button>
         
-        <div id="nearby-devices-container" style="display: none; margin-top: 12px; padding: 15px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px; flex-direction: column; gap: 8px; text-align: left;">
+        <div id="nearby-devices-container" style="display: none; width: 100%; margin-top: 12px; padding: 15px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px; flex-direction: column; gap: 8px; text-align: left;">
             <div style="font-size: 11px; font-weight: 700; color: var(--accent);">📡 탐색된 동일 와이파이 PC 기기:</div>
             <div id="nearby-devices-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; padding-right: 4px;">
                 <!-- 기기 항목 렌더링 -->
@@ -655,8 +656,9 @@
     <div id="main_ui" style="display: none;">
         <!-- 상단 헤더 -->
         <header>
-            <div class="logo-area">
-                <h1>Chronos <span>v4.1.0</span></h1>
+            <div class="logo-area" style="display: flex; align-items: center; gap: 10px;">
+                <img src="logo.png" alt="chip찮이즘 로고" style="height: 32px; width: 32px; border-radius: 6px; object-fit: cover;">
+                <h1 style="font-size: 20px; font-weight: 800; color: var(--accent); margin: 0;">chip찮이즘 <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">v4.1.0</span></h1>
                 <span class="version-badge" id="pricing-badge-header">FREE PLAN</span>
             </div>
             <div style="display: flex; align-items: center; gap: 16px;">
@@ -1013,7 +1015,7 @@
         <div id="tab-pricing" class="tab-content">
             <!-- 요금제 비교 카드 -->
             <div class="panel" style="margin-bottom: 24px;">
-                <h2 class="panel-title">💎 Chronos AI 라이선스 요금제 비교</h2>
+                <h2 class="panel-title">💎 chip찮이즘 라이선스 요금제 비교</h2>
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                     <button class="btn" id="billing-cycle-monthly" onclick="toggleBillingCycle('monthly')" style="padding: 8px 16px; font-size: 12px;">월간 요금제</button>
                     <button class="btn btn-outline" id="billing-cycle-yearly" onclick="toggleBillingCycle('yearly')" style="padding: 8px 16px; font-size: 12px;">연간 요금제 (33% 할인)</button>
@@ -1094,14 +1096,14 @@
 
             <!-- 역대 버전 아카이브 패널 (컴퓨터가 없는 모바일 단독 사용자를 위한 다운로드/롤백 안내) -->
             <div class="panel">
-                <h2 class="panel-title">📂 Chronos AI 역대 빌드 버전 아카이브</h2>
+                <h2 class="panel-title">📂 chip찮이즘 역대 빌드 버전 아카이브</h2>
                 <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
                     원하는 버전을 터치하여 모바일 기기에 바로 저장하고 실행할 수 있습니다. 컴퓨터가 없는 사용자도 기기 독립 구동을 완벽 지원합니다.
                 </p>
                 <div class="version-scroll-box">
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v4.1.0 (최신 빌드)</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v4.1.0 (최신 빌드)</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-13 • PWA Auto-Update 및 유튜브 스튜디오 대시보드 릴리즈</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1111,7 +1113,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v4.0.4</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v4.0.4</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-13 • PC/모바일 UI 100% 동일 대칭 대칭화 완료</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1120,7 +1122,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v4.0.3</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v4.0.3</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-12 • 24시간 백그라운드 엔진 및 유튜브 SEO 대시보드 탑재</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1129,7 +1131,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v3.5.3</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v3.5.3</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-11 • 프로젝트 작업 통합 AGENTS 규칙 빌드</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1138,7 +1140,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v3.5.0 (안정 빌드)</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v3.5.0 (안정 빌드)</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-10 • AI 프롬프트 가이드 지침서 지식엔진 탑재</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1147,7 +1149,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v3.0.0</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v3.0.0</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-09 • 피크 아워 스케줄러 자동 업로드 모듈</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1156,7 +1158,7 @@
                     </div>
                     <div class="version-item">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">Chronos Engine v2.0.0 (망한 버전)</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--accent);">chip찮이즘 Engine v2.0.0 (망한 버전)</div>
                             <div style="font-size: 11px; color: var(--text-muted);">2026-07-08 • 틱톡 연동 및 레거시 UI 불안정으로 실패한 릴리즈</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
@@ -1835,7 +1837,7 @@
                     const data = await res.json();
                     listEl.innerHTML = "";
                     if (!data.devices || data.devices.length === 0) {
-                        listEl.innerHTML = '<div style="font-size:12px;color:var(--primary);font-weight:700;">📡 스캔 실패: 근처에 활성화된 PC 기기를 찾을 수 없습니다.</div><p style="font-size:10px;color:var(--text-muted);margin:0;line-height:1.4;">PC에서 Chronos 사이트 대시보드가 열려 있고 스마트폰과 같은 와이파이(네트워크)에 접속되어 있는지 확인하세요.</p>';
+                        listEl.innerHTML = '<div style="font-size:12px;color:var(--primary);font-weight:700;">📡 스캔 실패: 근처에 활성화된 PC 기기를 찾을 수 없습니다.</div><p style="font-size:10px;color:var(--text-muted);margin:0;line-height:1.4;">PC에서 chip찮이즘 대시보드가 열려 있고 스마트폰과 같은 와이파이(네트워크)에 접속되어 있는지 확인하세요.</p>';
                         return;
                     }
                     
