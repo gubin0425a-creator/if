@@ -224,7 +224,8 @@ async def run_pipeline(
     media_type: str = "image",
     aspect_ratio: str = "9:16",
     long_form: bool = False,
-    coupang_mode: bool = False
+    coupang_mode: bool = False,
+    duration: int = 3
 ):
     print()
     print("=" * 60)
@@ -251,7 +252,9 @@ async def run_pipeline(
     print(f"\n⏳ Gemini AI가 '{title}' 대본({style} 스타일, {form_label})을 작성하고 있습니다...")
     script_data = generate_script(title, hook, style=style, is_long_form=is_long_form, lang=subtitle_lang, coupang_mode=coupang_mode)
     scenes = script_data.get("scenes", [])
-    print(f"✅ 대본 완성! {len(scenes)}개 장면")
+    for s in scenes:
+        s["duration_sec"] = duration
+    print(f"✅ 대본 완성! {len(scenes)}개 장면 (각 장면 재생시간: {duration}초)")
     
     # 단일 자막 모델이므로 나오는 나레이션을 모두 자막으로 연동 (안전망 강화)
     for s in scenes:
@@ -392,9 +395,12 @@ if __name__ == "__main__":
                          help="16:9 유튜브 일반영상 롱폼 모드 (24씬, 5~8분). 생략 시 4씬 숏폼.")
     parser.add_argument("--coupang-mode", action="store_true", default=False,
                          help="쿠팡 파트너스 연계 가상역사 스토리텔링 대본 모드 활성화.")
+    parser.add_argument("--duration", type=int, default=3,
+                         help="장면당 재생 시간(초) 설정.")
     args = parser.parse_args()
  
     asyncio.run(run_pipeline(
         args.topic, args.lang, args.pick, args.style, args.mood, args.hook, 
-        args.media_type, args.aspect_ratio, args.long_form, args.coupang_mode
+        args.media_type, args.aspect_ratio, args.long_form, args.coupang_mode,
+        args.duration
     ))
