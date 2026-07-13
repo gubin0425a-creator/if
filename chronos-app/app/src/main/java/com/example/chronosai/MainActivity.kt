@@ -38,6 +38,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val sharedPref = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // 동일 와이파이 / 유선 USB 연결 시 설정을 원클릭으로 주입하기 위한 인텐트 처리
+        intent?.let {
+            val ipExtra = it.getStringExtra("ip")
+            val portExtra = it.getStringExtra("port")
+            val codeExtra = it.getStringExtra("master_code")
+            
+            val editor = sharedPref.edit()
+            var changed = false
+            if (!ipExtra.isNullOrEmpty()) {
+                editor.putString(KEY_IP, ipExtra)
+                changed = true
+            }
+            if (!portExtra.isNullOrEmpty()) {
+                editor.putString(KEY_PORT, portExtra)
+                changed = true
+            }
+            if (!codeExtra.isNullOrEmpty()) {
+                editor.putString("master_code", codeExtra)
+                changed = true
+            }
+            if (changed) {
+                editor.apply()
+            }
+        }
+
         val initialIp = sharedPref.getString(KEY_IP, "192.168.0.162") ?: "192.168.0.162"
         val initialPort = sharedPref.getString(KEY_PORT, "5000") ?: "5000"
 
