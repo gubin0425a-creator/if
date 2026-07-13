@@ -119,6 +119,148 @@ def issue_code():
     code = SecurityManager.get_current_code()
     return jsonify({"code": code})
 
+# 근거리 기기 리스트 및 간편인증 요청 상태
+active_devices = {}  # { device_id: { name, type, ip, last_ping } }
+pending_approvals = {} # { to_device_id: { from_device_id, from_name, status, code } }
+
+@app.route('/api/device/register', methods=['POST'])
+def register_device():
+    data = request.json or {}
+    device_id = data.get("device_id", "").strip()
+    device_name = data.get("device_name", "").strip()
+    client_type = data.get("client_type", "").strip() # 'pc' or 'mobile'
+    
+    if not device_id or not device_name or not client_type:
+        return jsonify({"error": "필수 파라미터가 누락되었습니다."}), 400
+        
+    client_ip = request.remote_addr
+    if request.headers.getlist("X-Forwarded-For"):
+        client_ip = request.headers.getlist("X-Forwarded-For")[0]
+        
+    active_devices[device_id] = {
+        "name": device_name,
+        "type": client_type,
+        "ip": client_ip,
+        "last_ping": time.time()
+    }
+    
+    # Clean up old devices (older than 30 seconds)
+    now = time.time()
+    for k in list(active_devices.keys()):
+        if now - active_devices[k]["last_ping"] > 30:
+            active_devices.pop(k, None)
+            
+    return jsonify({"status": "registered"})
+
+@app.route('/api/device/nearby', methods=['GET'])
+def get_nearby_devices():
+    """같은 와이파이/네트워크(IP 대역) 상의 활성 PC 기기들을 리턴"""
+    client_ip = request.remote_addr
+    if request.headers.getlist("X-Forwarded-For"):
+        client_ip = request.headers.getlist("X-Forwarded-For")[0]
+        
+    private_prefixes = ("127.", "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "localhost", "::1")
+    
+    gating = load_gating()
+    active_pc_ip = gating.get("active_pc_ip", "")
+    server_pub = get_server_public_ip()
+    
+    now = time.time()
+    nearby = []
+    
+    for dev_id, dev in list(active_devices.items()):
+        if now - dev["last_ping"] < 30 and dev["type"] == "pc":
+            is_same = False
+            # 로컬망 대조
+            if any(client_ip.startswith(prefix) for prefix in private_prefixes) and any(dev["ip"].startswith(prefix) for prefix in private_prefixes):
+                is_same = True
+            # 또는 공인 IP 대조
+            elif client_ip == dev["ip"]:
+                is_same = True
+            elif active_pc_ip and dev["ip"] == active_pc_ip:
+                is_same = True
+            elif server_pub and dev["ip"] == server_pub:
+                is_same = True
+                
+            if is_same:
+                nearby.append({
+                    "device_id": dev_id,
+                    "name": dev["name"]
+                })
+                
+    return jsonify({"devices": nearby})
+
+@app.route('/api/device/request_approval', methods=['POST'])
+def request_approval():
+    data = request.json or {}
+    from_id = data.get("from_device_id", "").strip()
+    to_id = data.get("to_device_id", "").strip()
+    from_name = data.get("from_name", "스마트폰 기기").strip()
+    
+    if not from_id or not to_id:
+        return jsonify({"error": "파라미터가 누락되었습니다."}), 400
+        
+    pending_approvals[to_id] = {
+        "from_device_id": from_id,
+        "from_name": from_name,
+        "status": "pending",
+        "code": ""
+    }
+    return jsonify({"status": "requested"})
+
+@app.route('/api/device/check_requests', methods=['GET'])
+def check_requests():
+    device_id = request.args.get("device_id", "").strip()
+    if not device_id:
+        return jsonify({"error": "device_id가 필요합니다."}), 400
+        
+    req = pending_approvals.get(device_id)
+    if req and req["status"] == "pending":
+        return jsonify({
+            "has_request": True,
+            "from_device_id": req["from_device_id"],
+            "from_name": req["from_name"]
+        })
+    return jsonify({"has_request": False})
+
+@app.route('/api/device/approve', methods=['POST'])
+def approve_request():
+    data = request.json or {}
+    pc_id = data.get("device_id", "").strip()
+    action = data.get("action", "").strip() # 'approve' or 'reject'
+    
+    if not pc_id or pc_id not in pending_approvals:
+        return jsonify({"error": "요청이 존재하지 않거나 만료되었습니다."}), 404
+        
+    req = pending_approvals[pc_id]
+    if action == "approve":
+        req["status"] = "approved"
+        req["code"] = SecurityManager.get_current_code()
+    else:
+        req["status"] = "rejected"
+        
+    return jsonify({"status": "processed"})
+
+@app.route('/api/device/approval_status', methods=['GET'])
+def get_approval_status():
+    device_id = request.args.get("device_id", "").strip()
+    if not device_id:
+        return jsonify({"error": "device_id가 필요합니다."}), 400
+        
+    for pc_id, req in list(pending_approvals.items()):
+        if req["from_device_id"] == device_id:
+            if req["status"] == "approved":
+                code = req["code"]
+                pending_approvals.pop(pc_id, None)
+                return jsonify({"status": "approved", "code": code})
+            elif req["status"] == "rejected":
+                pending_approvals.pop(pc_id, None)
+                return jsonify({"status": "rejected"})
+            else:
+                return jsonify({"status": "pending"})
+                
+    return jsonify({"status": "not_found"})
+
 # 요금제 제한(Gating) 데이터 관리
 GATING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp", "user_gating.json")
 
