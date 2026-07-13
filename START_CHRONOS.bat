@@ -1,20 +1,30 @@
 @echo off
-title Chronos v3.0 - AI Shorts Creator
+setlocal
+title Chronos v4.0 - AI Video Creator
 color 0b
-echo ==================================================================
-echo   Welcome to Chronos v3.0 - AI Shorts Creator
-echo ==================================================================
-echo.
-echo   [1/2] Loading Desktop GUI Application...
-echo   [2/2] Running scripts in the background...
-echo.
-echo   * Close this window to exit the application.
-echo ==================================================================
-echo.
 
 cd /d "%~dp0"
 
-:: Start the native desktop GUI
+echo ==================================================================
+echo   * Chronos v4.0 - AI Video Creator *
+echo ==================================================================
+echo.
+echo   [System] Checking virtual environment...
+
+if not exist ".venv\Scripts\python.exe" (
+    echo   [Error] .venv environment not found.
+    pause
+    exit /b
+)
+
+echo   [System] Loading Chronos v4.0 Engine...
+echo   [System] Please wait...
+echo.
+
 .venv\Scripts\python.exe gui.py
 
+echo.
+echo ==================================================================
+echo   [System] Program terminated.
+echo ==================================================================
 pause

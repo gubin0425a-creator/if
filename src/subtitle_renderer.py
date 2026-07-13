@@ -171,15 +171,15 @@ def draw_subtitle_on_image(
 def generate_srt(scenes: list[dict], lang: str = "ko") -> str:
     """
     장면 목록으로 SRT 자막 파일 내용을 생성합니다.
-    lang: 'ko', 'en', 'ja'
+    (단일 자막 모델이므로 lang 파라미터는 호환성용으로 놔두고 subtitle 필드를 공용으로 읽습니다.)
     """
     srt_lines = []
     timestamp = 0.0
 
     for i, scene in enumerate(scenes):
         duration = scene.get("duration_sec", 10)
-        subtitle_key = f"subtitle_{lang}"
-        subtitle = scene.get(subtitle_key, scene.get("subtitle_ko", ""))
+        # subtitle_ko, subtitle_en 등으로 나뉘지 않고 subtitle 키 하나에 병합되어 있으므로 fallback 처리
+        subtitle = scene.get("subtitle", scene.get(f"subtitle_{lang}", scene.get("subtitle_ko", "")))
 
         start_h = int(timestamp // 3600)
         start_m = int((timestamp % 3600) // 60)

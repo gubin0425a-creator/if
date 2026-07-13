@@ -132,7 +132,7 @@ def build_scene_clip(
         except Exception as e:
             print(f"    [Assembler] 오디오 로딩 실패: {e}")
 
-    subtitle    = scene.get(f"subtitle_{subtitle_lang}", scene.get("subtitle_ko", ""))
+    subtitle    = scene.get("subtitle", scene.get(f"subtitle_{subtitle_lang}", scene.get("subtitle_ko", "")))
     bg_color    = scene.get("bg_color", "#1a1a2e")
     is_hook     = scene.get("is_hook", False)
     

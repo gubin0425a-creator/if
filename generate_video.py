@@ -118,7 +118,7 @@ def create_text_image(text, bg_color, output_path, font_size=55):
 
 async def generate_tts(text, output_path, voice="ko-KR-InJoonNeural"):
     """Generates speech audio file from text using Edge-TTS"""
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate="+30%")
     await communicate.save(output_path)
 
 def generate_script(api_key, topic):

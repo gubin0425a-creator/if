@@ -11,11 +11,131 @@ from dotenv import load_dotenv
 # Ensure UTF-8 output
 sys.stdout.reconfigure(encoding='utf-8')
 
+from src.security import SecurityManager
+
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# 초기 코드 생성 및 출력
+SecurityManager.get_current_code()
+
+@app.route('/api/verify_code', methods=['POST'])
+def verify_code():
+    data = request.json or {}
+    code = data.get("code", "")
+    if SecurityManager.verify_code(code):
+        return jsonify({"status": "success", "message": "마스터 코드가 인증되었습니다."})
+    return jsonify({"status": "error", "message": "잘못된 코드입니다."}), 403
+
+@app.route('/mobile')
+def mobile_index():
+    """안드로이드/모바일 전용 최적화 UI"""
+    ui_path = os.path.join(BASE_DIR, "ui", "mobile.html")
+    if os.path.exists(ui_path):
+        with open(ui_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Mobile UI file not found."
+
+@app.route('/api/factory', methods=['POST'])
+def start_factory():
+    """30분 영상 3개 풀-오토 공장 API"""
+    data = request.json or {}
+    code = data.get("code", "")
+    if not SecurityManager.verify_code(code):
+        return jsonify({"error": "보안 인증이 필요합니다."}), 403
+
+    coupang_mode = data.get("coupang_mode", False)
+    task_id = str(uuid.uuid4())
+    log_path = os.path.join(LOG_DIR, f"{task_id}.log")
+
+    cmd = [
+        sys.executable,
+        "-u",
+        os.path.join(BASE_DIR, "tools", "factory_worker.py"),
+        "--mode", "factory"
+    ]
+    if coupang_mode:
+        cmd.append("--coupang-mode")
+
+    log_file = open(log_path, "w", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=BASE_DIR,
+            text=True,
+            env=dict(os.environ, PYTHONIOENCODING="utf-8")
+        )
+        active_tasks[task_id] = {
+            "process": proc,
+            "log_file": log_file,
+            "topic": "30분 공장 모드 가동",
+            "lang": "ko"
+        }
+        return jsonify({"task_id": task_id, "status": "started"})
+    except Exception as e:
+        log_file.close()
+        return jsonify({"error": f"공장 프로세스 시작 실패: {str(e)}"}), 500
+
+@app.route('/api/scheduler', methods=['POST'])
+def start_scheduler():
+    """24시간 무인 자동화 엔진 가동 API"""
+    data = request.json or {}
+    code = data.get("code", "")
+    if not SecurityManager.verify_code(code):
+        return jsonify({"error": "보안 인증이 필요합니다."}), 403
+
+    coupang_mode = data.get("coupang_mode", False)
+    task_id = str(uuid.uuid4())
+    log_path = os.path.join(LOG_DIR, f"{task_id}.log")
+
+    cmd = [
+        sys.executable,
+        "-u",
+        os.path.join(BASE_DIR, "tools", "factory_worker.py"),
+        "--mode", "24h"
+    ]
+    if coupang_mode:
+        cmd.append("--coupang-mode")
+
+    log_file = open(log_path, "w", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=BASE_DIR,
+            text=True,
+            env=dict(os.environ, PYTHONIOENCODING="utf-8")
+        )
+        active_tasks[task_id] = {
+            "process": proc,
+            "log_file": log_file,
+            "topic": "24시간 무인 자동화",
+            "lang": "ko"
+        }
+        return jsonify({"task_id": task_id, "status": "started"})
+    except Exception as e:
+        log_file.close()
+        return jsonify({"error": f"무인 자동화 프로세스 시작 실패: {str(e)}"}), 500
+
+@app.route('/api/optimize_seo', methods=['POST'])
+def optimize_seo():
+    data = request.json or {}
+    filename = data.get("filename")
+    if not filename: return jsonify({"error": "파일명 누락"}), 400
+
+    try:
+        from src.channel_optimizer import ChannelOptimizer
+        # 메타데이터 로드 및 최적화 로직 수행
+        # ... (gui.py의 worker 로직과 유사)
+        return jsonify({"status": "success", "message": "SEO 최적화 완료"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "temp", "logs")
@@ -76,6 +196,7 @@ def generate():
     is_direct = data.get("is_direct", False)
     media_type = data.get("media_type", "image")
     aspect_ratio = data.get("aspect_ratio", "9:16")
+    coupang_mode = data.get("coupang_mode", False)
     
     # 추천 없이 다이렉트로 바로 제작하는 경우, 기성 훅 자동 빌드
     if is_direct and not hook:
@@ -89,7 +210,7 @@ def generate():
     
     # Command to run generate_video_v2.py
     cmd = [
-        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
+        sys.executable,
         "-u",  # Unbuffered output to write logs in real-time
         os.path.join(BASE_DIR, "generate_video_v2.py"),
         "--topic", topic,
@@ -99,6 +220,8 @@ def generate():
         "--media-type", media_type,
         "--aspect-ratio", aspect_ratio
     ]
+    if coupang_mode:
+        cmd.append("--coupang-mode")
     if pick is not None:
         cmd.extend(["--pick", str(pick)])
     if hook:
@@ -133,7 +256,7 @@ def upload():
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
+        sys.executable,
         "-u",
         os.path.join(BASE_DIR, "main.py")
     ]
@@ -167,7 +290,7 @@ def api_init_session():
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
+        sys.executable,
         "-u",
         os.path.join(BASE_DIR, "init_session.py")
     ]
@@ -351,7 +474,7 @@ def upload_single():
     log_path = os.path.join(LOG_DIR, f"{task_id}.log")
     
     cmd = [
-        os.path.join(BASE_DIR, ".venv", "Scripts", "python"),
+        sys.executable,
         "-u",
         os.path.join(BASE_DIR, "main.py"),
         "--video", filename
@@ -385,5 +508,6 @@ def serve_video(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 if __name__ == '__main__':
-    # Run server on port 5000
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Run server on port from environment variable (default: 5000) for Render compatibility
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)

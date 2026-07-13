@@ -460,17 +460,13 @@ def generate_ai_video(prompt: str, save_path: str, duration_sec: int = 6, aspect
             f"masterpiece, National Geographic style, professional camera panning movement, {comp}"
         )
         
-        # duration은 Veo가 허용하는 4~8초 범위로 강제 조정
-        clamped_duration = max(4, min(8, int(duration_sec)))
-        
-        print(f"    [Veo Video] [INFO] Veo AI 비디오 생성 시작 (Model: veo-3.1-generate-preview, {clamped_duration}초, 비율: {aspect_ratio})...")
+        print(f"    [Veo Video] [INFO] Veo AI 비디오 생성 시작 (Model: veo-3.1-generate-preview, 비율: {aspect_ratio})...")
         
         operation = client.models.generate_videos(
             model='veo-3.1-generate-preview',
             prompt=enhanced_prompt,
             config=genai_types.GenerateVideosConfig(
                 aspect_ratio=aspect_ratio,
-                duration_seconds=clamped_duration,
             )
         )
         
@@ -515,26 +511,18 @@ def fetch_scene_media(scene: dict, scene_index: int, temp_dir: str, media_type: 
     final_video_path = os.path.join(temp_dir, f"scene_media_{scene_index}.mp4")
     
     # ── [동영상(video) 모드인 경우] ──
+    # 무료 외부 영상 사이트(Pixabay/Pexels) 사용 금지 - AI 전용 정책
     if media_type == "video":
-        print(f"    [Media] [INFO] 비디오 모드 구동 중 (Scene {scene_index + 1})")
-        # 1. Pixabay/Pexels 에서 B-roll 영상 소스 우선 검색 (가장 빠름)
-        if video_query:
-            print(f"    [Media] [INFO] 1단계: B-roll 비디오 검색 중: '{video_query}'...")
-            if fetch_pixabay_video(video_query, final_video_path):
-                return {"type": "video", "path": final_video_path}
-            elif fetch_pexels_video(video_query, final_video_path, aspect_ratio):
-                return {"type": "video", "path": final_video_path}
-                
-        # 2. Google Veo AI 동영상 생성 시도
+        print(f"    [Media] [INFO] AI 동영상 전용 모드 구동 중 (Scene {scene_index + 1})")
+        # 1. Google Veo AI 동영상 생성 (유일한 영상 소스)
         if image_query:
-            print(f"    [Media] [INFO] 2단계: Google Veo AI 동영상 생성 시도...")
+            print(f"    [Media] [INFO] Google Veo AI 동영상 생성 시도...")
             if generate_ai_video(image_query, final_video_path, duration_sec, aspect_ratio):
                 return {"type": "video", "path": final_video_path}
             else:
-                print(f"    [Media] [WARN] Veo 동영상 생성 실패. 이미지 생성 방식으로 폴백합니다.")
+                print(f"    [Media] [WARN] Veo 동영상 생성 실패. AI 이미지(Ken Burns) 폴백으로 전환합니다.")
         
-        # 3. 비디오 생성이 실패하거나 없을 경우 이미지 모드로 자연 폴백(Fallback) 진행!
-        # (이미지가 리턴되면 video_assembler가 알아서 Ken Burns 효과를 주어 결합합니다.)
+        # 2. Veo 실패 시 Imagen AI 이미지 폴백만 허용 (외부 무료 사이트 사용 금지)
 
     # ── [기본 이미지(image) 모드 또는 비디오 생성 실패 폴백인 경우] ──
     # 1단계: 실제 역사 고증 사진/유물/지도 검색 (Wikimedia -> Pixabay -> Pexels)

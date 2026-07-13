@@ -3,7 +3,6 @@ import sys
 import shutil
 import json
 import asyncio
-from src.uploader import TikTokUploader
 from src.youtube_uploader import YouTubeUploader
 
 import argparse
@@ -26,7 +25,7 @@ async def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("🎬 틱톡 & 유튜브 통합 자동 업로드 파이프라인 (main.py)")
+    print("🎬 유튜브 Shorts 전용 자동 업로드 파이프라인 (main.py)")
     print("=" * 60)
 
     if args.video:
@@ -44,8 +43,7 @@ async def main():
 
     print(f"\n[Main] 업로드 대기 중인 영상: {len(video_files)}개 발견")
 
-    # Initialize Uploaders
-    tiktok_uploader = TikTokUploader()
+    # Initialize YouTube Uploader
     youtube_uploader = YouTubeUploader()
 
     # Check YouTube Client Secrets
@@ -97,24 +95,12 @@ async def main():
         # 2. Build Captions/Titles
         # TikTok Caption
         tiktok_caption = f"🎬 {title}\n\n💬 {hook}\n\n" + " ".join([f"#{t}" for t in tags[:5]])
-        # YouTube Title (max 100 chars, Shorts tag added in uploader)
+        # YouTube Title (max 100 chars)
         youtube_title = f"{title}"
-        if len(youtube_title) > 80:
-            youtube_title = youtube_title[:80]
+        if len(youtube_title) > 85:
+            youtube_title = youtube_title[:85]
         # YouTube Description
         youtube_description = f"{hook}\n\n{description}\n\n" + " ".join([f"#{t}" for t in tags])
-
-        # ── A. 틱톡 업로드 실행 ──
-        print("\n[Main] 📲 틱톡 자동 업로드 시작...")
-        success_tiktok = False
-        try:
-            success_tiktok = await tiktok_uploader.upload_video(video_path, tiktok_caption, wait_for_publish=False)
-            if success_tiktok:
-                print("[Main] 틱톡 업로드 절차가 완료되었습니다.")
-            else:
-                print("[Main] ❌ 틱톡 업로드에 실패했습니다.")
-        except Exception as e:
-            print(f"[Main] ❌ 틱톡 업로드 중 오류 발생: {e}")
 
         # ── B. 유튜브 업로드 실행 ──
         success_youtube = False
@@ -133,14 +119,23 @@ async def main():
                 if video_id:
                     success_youtube = True
                     print(f"[Main] 유튜브 Shorts 업로드 성공! (ID: {video_id})")
+                    # Save video ID to metadata
+                    if os.path.exists(metadata_file):
+                        try:
+                            with open(metadata_file, "r", encoding="utf-8") as f:
+                                meta = json.load(f)
+                            meta['youtube_video_id'] = video_id
+                            with open(metadata_file, "w", encoding="utf-8") as f:
+                                json.dump(meta, f, ensure_ascii=False, indent=2)
+                        except:
+                            pass
             except Exception as e:
                 print(f"[Main] ❌ 유튜브 업로드 중 오류 발생: {e}")
         else:
-            # YouTube was skipped, treat as "success" for queue movement if TikTok succeeded
-            success_youtube = True
+            print("\n[Main] ⚠️ client_secrets.json이 없어 업로드를 생략합니다.")
 
         # ── C. 작업 처리 결과 정리 ──
-        if success_tiktok:
+        if success_youtube:
             # Move uploaded video to completed directory
             completed_dest = os.path.join(COMPLETED_DIR, video_file)
             try:

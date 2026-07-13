@@ -104,12 +104,39 @@ def select_topic(base_topic: Optional[str] = None, auto_pick: Optional[int] = No
         print("⚠️  올바른 번호를 입력해주세요 (1~5 또는 0)")
 
 
+def _create_silent_mp3(output_path: str, duration: float = 1.0):
+    """ffmpeg을 이용해 지정된 초만큼 무음 mp3 파일을 생성합니다."""
+    import subprocess
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+            "-t", str(duration), "-acodec", "libmp3lame", output_path
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    except Exception:
+        # ffmpeg 실패 시 0바이트 공파일 생성
+        with open(output_path, "wb") as f:
+            f.write(b"")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2: TTS 음성 생성 (Edge-TTS, 비동기)
 # ─────────────────────────────────────────────────────────────────────────────
 async def _generate_tts(text: str, voice: str, output_path: str):
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_path)
+    clean_text = text.strip() if text else ""
+    # Edge-TTS는 한글 자음/모음만 있거나 특수기호만 있을 때 혹은 빈 텍스트일 때 예외를 뿜으므로 방어 코드 작동
+    import re
+    # 영문/숫자/한글 등 유효한 음성 기호가 전혀 없으면 묵음 처리
+    if not clean_text or not re.search(r'[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣]', clean_text):
+        print(f"    [TTS] [WARN] 나레이션 텍스트가 비어 있거나 유효하지 않아 묵음 처리합니다.")
+        _create_silent_mp3(output_path, duration=1.0)
+        return
+
+    try:
+        communicate = edge_tts.Communicate(clean_text, voice, rate="+30%")
+        await communicate.save(output_path)
+    except Exception as e:
+        print(f"    [TTS] [ERROR] Edge-TTS 오디오 생성 실패 ({e}). 묵음 파일로 폴백합니다. (Text: '{clean_text}')")
+        _create_silent_mp3(output_path, duration=1.5)
 
 
 async def generate_all_audio(scenes: list[dict], lang: str = "ko") -> list[str]:
@@ -118,8 +145,8 @@ async def generate_all_audio(scenes: list[dict], lang: str = "ko") -> list[str]:
     tasks = []
     paths = []
     for i, scene in enumerate(scenes):
-        narration_key = f"narration_{lang}"
-        text = scene.get(narration_key, scene.get("narration_ko", ""))
+        # 다국어 필드가 아닌 단일 narration 필드에서 가져옴
+        text = scene.get("narration", scene.get(f"narration_{lang}", scene.get("narration_ko", "")))
         out  = os.path.join(TEMP_DIR, f"audio_scene_{i}.mp3")
         paths.append(out)
         tasks.append(_generate_tts(text, voice, out))
@@ -176,7 +203,8 @@ def build_all_clips(
     clips = []
     print(f"  [Build] 🎬 장면 클립 조립 중...")
     for i, (scene, media, audio) in enumerate(zip(scenes, media_list, audio_paths)):
-        print(f"    장면 {i+1}/{len(scenes)}: {scene.get(f'subtitle_{subtitle_lang}', '')}")
+        subtitle = scene.get("subtitle", scene.get(f"subtitle_{subtitle_lang}", scene.get("subtitle_ko", "")))
+        print(f"    장면 {i+1}/{len(scenes)}: {subtitle}")
         clip = build_scene_clip(scene, media, audio, FONT_PATH, subtitle_lang, aspect_ratio)
         clips.append(clip)
     return clips
@@ -186,14 +214,17 @@ def build_all_clips(
 # 메인 파이프라인
 # ─────────────────────────────────────────────────────────────────────────────
 async def run_pipeline(
-    base_topic: Optional[str] = None, 
-    subtitle_lang: str = "ko", 
+    base_topic: Optional[str] = None,
+    subtitle_lang: str = "ko",
     auto_pick: Optional[int] = None,
     style: str = "photorealistic",
     mood: str = "auto",
     hook: Optional[str] = None,
     media_type: str = "image",
-    aspect_ratio: str = "9:16"
+    aspect_ratio: str = "9:16",
+    long_form: bool = False,
+    coupang_mode: bool = False,
+    auto_upload: bool = True
 ):
     print()
     print("=" * 60)
@@ -213,40 +244,49 @@ async def run_pipeline(
         title, hook = select_topic(base_topic, auto_pick=auto_pick)
 
     # ── 2. 대본 생성 ──────────────────────────────────────────────────────────
-    print(f"\n⏳ Gemini AI가 '{title}' 대본({style} 스타일)을 작성하고 있습니다...")
-    script_data = generate_script(title, hook, style=style)
+    is_long_form = long_form or (aspect_ratio == "16:9")
+    form_label = "롱폼 유튜브 일반영상 (5~8분)" if is_long_form else "숏폼 (20~25초)"
+    if coupang_mode: form_label = "90초 초고속 쿠팡 바이럴 (30컷)"
+
+    print(f"\n⏳ Gemini AI가 '{title}' 대본({style} 스타일, {form_label})을 작성하고 있습니다...")
+    script_data = generate_script(title, hook, style=style, is_long_form=is_long_form, lang=subtitle_lang, coupang_mode=coupang_mode)
     scenes = script_data.get("scenes", [])
     print(f"✅ 대본 완성! {len(scenes)}개 장면")
     
-    # [Feature] 나오는 나레이션을 모두 자막으로 연동 (subtitle을 narration으로 통대입)
+    # 단일 자막 모델이므로 나오는 나레이션을 모두 자막으로 연동 (안전망 강화)
     for s in scenes:
-        for l in ["ko", "en", "ja"]:
-            narr_text = s.get(f"narration_{l}", "")
-            if narr_text:
-                # 자막의 어색한 요약본 대신 나레이션 전체 대사가 자막으로 굽혀지도록 변경
-                s[f"subtitle_{l}"] = narr_text
+        narr_text = s.get("narration", "")
+        if narr_text:
+            s["subtitle"] = narr_text
 
     for i, s in enumerate(scenes):
-        print(f"   씬 {i+1}: {s.get('subtitle_ko', '')}")
+        print(f"   씬 {i+1}: {s.get('subtitle', '')}")
 
-    # ── 3. SRT 자막 파일 저장 ─────────────────────────────────────────────────
+    # -- 3. SRT 자막 파일 저장 ─────────────────────────────────────────────────
     print(f"\n📝 다국어 자막(.srt) 생성 중...")
-    # Windows 한글 경로 오류를 막기 위해 파일명은 영문/숫자로만 제한
-    import re
-    ascii_title = re.sub(r'[^a-zA-Z0-9_\-]', '', title[:30]).strip()
-    if not ascii_title:
-        ascii_title = f"video_{int(time.time())}"
-    save_srt_files(scenes, SRT_DIR, ascii_title)
+
+    # AI 최적화된 제목으로 파일명 생성 (특수문자 제거 및 공백 언더바 처리)
+    seo_title = script_data.get("title", title)
+    safe_filename = re.sub(r'[\\/:*?"<>|]', '', seo_title).strip()
+    safe_filename = re.sub(r'\s+', '_', safe_filename)
+    if not safe_filename:
+        safe_filename = f"video_{int(time.time())}"
+
+    save_srt_files(scenes, SRT_DIR, safe_filename)
     
     # Save video metadata JSON for automatic title/description upload with SEO scoring
     import json
     from src.seo_analyzer import SEOAnalyzer
 
     # Use AI-optimized SEO metadata from script_data
-    seo_title = script_data.get("title", title)
     seo_desc = script_data.get("seo_description", "")
     if not seo_desc:
-        seo_desc = "\n".join([s.get(f"narration_{subtitle_lang}", s.get("narration_ko", "")) for s in scenes])
+        seo_desc = "\n".join([s.get("narration", "") for s in scenes])
+        
+    if coupang_mode:
+        banner = "\n\n* 이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
+        if banner not in seo_desc:
+            seo_desc += banner
         
     seo_tags = script_data.get("seo_tags", [])
     if not seo_tags:
@@ -265,7 +305,7 @@ async def run_pipeline(
         "triple_keywords": seo_res.get("triple_keywords_list", [])
     }
     
-    metadata_path = os.path.join(SRT_DIR, f"{ascii_title}_metadata.json")
+    metadata_path = os.path.join(SRT_DIR, f"{safe_filename}_metadata.json")
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     print(f"  [Metadata] ✅ SEO 최적화 메타데이터 JSON 저장 완료 (SEO 점수: {seo_res.get('seo_score')}점): {os.path.basename(metadata_path)}")
@@ -288,7 +328,7 @@ async def run_pipeline(
     clips = build_all_clips(scenes, media_list, audio_paths, subtitle_lang, aspect_ratio)
 
     # ── 8. 최종 영상 렌더링 ───────────────────────────────────────────────────
-    output_filename = f"auto_shorts_{ascii_title}.mp4"
+    output_filename = f"{safe_filename}.mp4"
     output_path = os.path.join(UPLOAD_DIR, output_filename)
     print(f"\n🎥 최종 영상 렌더링 중...")
     assemble_final_video(clips, output_path, bg_music, music_volume=0.15)
@@ -313,10 +353,51 @@ async def run_pipeline(
     print("  🎉 영상 제작 완료!")
     print(f"  📂 영상: {output_path}")
     print(f"  📝 자막: {SRT_DIR}\\")
-    print()
-    print("  다음 단계:")
-    print("  → .venv\\Scripts\\python main.py  (틱톡 자동 업로드)")
     print("=" * 60)
+
+    # ── 10. 유튜브 자동 예약 업로드 ──────────────────────────────────────────
+    client_secrets_file = os.path.join(BASE_DIR, "client_secrets.json")
+    if auto_upload and os.path.exists(client_secrets_file):
+        print(f"\n📲 유튜브 Shorts 자동 예약 업로드 실행 중...")
+        try:
+            from src.youtube_uploader import YouTubeUploader
+            uploader = YouTubeUploader()
+            uploader.authenticate()
+            
+            # 시청자 시청 시간대를 고려한 맞춤형 다음 업로드 피크 시간 계산 (12:00, 18:00, 21:00, 23:00 KST)
+            next_publish_time = uploader.get_next_optimal_publish_time()
+            
+            # Shorts 제목 길이 조절 (최대 85자)
+            youtube_title = seo_title
+            if len(youtube_title) > 85:
+                youtube_title = youtube_title[:85]
+            
+            youtube_description = f"{script_data.get('hook', '')}\n\n{seo_desc}\n\n" + " ".join([f"#{t}" for t in seo_tags])
+            
+            video_id = uploader.upload_shorts(
+                video_path=output_path,
+                title=youtube_title,
+                description=youtube_description,
+                tags=seo_tags,
+                privacy_status="private",
+                publish_at=next_publish_time
+            )
+            if video_id:
+                print(f"  [YouTube] 🎉 자동 예약 업로드 등록 성공! (Shorts ID: {video_id})")
+                print(f"  [YouTube] ⏰ 게시 예정 시간: {next_publish_time} (KST)")
+                
+                # 완료 폴더로 영상 및 메타데이터 이동
+                COMPLETED_DIR = os.path.join(BASE_DIR, "completed")
+                os.makedirs(COMPLETED_DIR, exist_ok=True)
+                import shutil
+                try:
+                    shutil.move(output_path, os.path.join(COMPLETED_DIR, output_filename))
+                    shutil.move(metadata_path, os.path.join(COMPLETED_DIR, os.path.basename(metadata_path)))
+                    print(f"  [YouTube] ✅ 업로드 완료 영상/메타데이터를 완료 폴더('completed')로 이동했습니다.")
+                except Exception as e:
+                    print(f"  [YouTube] ⚠️ 파일 이동 중 오류 발생: {e}")
+        except Exception as e:
+            print(f"  [YouTube] ❌ 자동 업로드 실패: {e}")
 
     # 사용된 클립 리소스 해제
     for clip in clips:
@@ -348,6 +429,18 @@ if __name__ == "__main__":
     parser.add_argument("--aspect-ratio", type=str, default="9:16",
                          choices=["9:16", "16:9"],
                          help="비디오 화면 비율 (기본: 9:16)")
+    parser.add_argument("--long-form", action="store_true", default=False,
+                         help="16:9 유튜브 일반영상 롱폼 모드 (24씬, 5~8분). 생략 시 4씬 숏폼.")
+    parser.add_argument("--coupang-mode", action="store_true", default=False,
+                         help="쿠팡 파트너스 연계 가상역사 스토리텔링 대본 모드 활성화.")
+    parser.add_argument("--auto-upload", action="store_true", default=True,
+                         help="영상 생성 완료 후 유튜브에 자동 업로드 실행 (기본: True)")
+    parser.add_argument("--no-upload", action="store_false", dest="auto_upload",
+                         help="영상 완료 후 자동 업로드를 생략합니다.")
     args = parser.parse_args()
  
-    asyncio.run(run_pipeline(args.topic, args.lang, args.pick, args.style, args.mood, args.hook, args.media_type, args.aspect_ratio))
+    asyncio.run(run_pipeline(
+        args.topic, args.lang, args.pick, args.style, args.mood, args.hook, 
+        args.media_type, args.aspect_ratio, args.long_form, args.coupang_mode,
+        args.auto_upload
+    ))
