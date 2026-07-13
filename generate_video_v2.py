@@ -133,7 +133,7 @@ async def _generate_tts(text: str, voice: str, output_path: str):
         return
 
     try:
-        communicate = edge_tts.Communicate(clean_text, voice, rate="+30%")
+        communicate = edge_tts.Communicate(clean_text, voice, rate="+10%")
         await communicate.save(output_path)
     except Exception as e:
         print(f"    [TTS] [ERROR] Edge-TTS 오디오 생성 실패 ({e}). 묵음 파일로 폴백합니다. (Text: '{clean_text}')")
@@ -319,7 +319,7 @@ async def run_pipeline(
     audio_paths = await generate_all_audio(scenes, subtitle_lang)
 
     # ── 6. 배경음악 자동 생성 및 검색 ───────────────────────────────────────────
-    bg_music_path = os.path.join(TEMP_DIR, "ai_background_music.mp3")
+    bg_music_path = os.path.join(TEMP_DIR, f"ai_bgm_{int(time.time())}.mp3")
     from src.music_generator import generate_background_music
     bg_music = generate_background_music(script_data, bg_music_path, mood=mood, target_duration=60)
 

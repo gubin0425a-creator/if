@@ -238,8 +238,10 @@ def generate_background_music(
     ] if os.path.exists(music_dir) else []
  
     if local_files:
-        print(f"  [Music] 로컬 음악 파일 사용: {os.path.basename(local_files[0])}")
-        return local_files[0]
+        import random
+        selected_track = random.choice(local_files)
+        print(f"  [Music] 로컬 음악 무작위 선택 사용: {os.path.basename(selected_track)}")
+        return selected_track
  
     print(f"  [Music] ⚠️  배경음악 없음 (Freesound API 키를 등록하면 자동 검색됩니다)")
     return None
