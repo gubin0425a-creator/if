@@ -24,6 +24,7 @@ import time
 import asyncio
 import argparse
 import shutil
+import re
 from typing import Optional
 
 # Windows 터미널 UTF-8 출력 강제
